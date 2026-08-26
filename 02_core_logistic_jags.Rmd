@@ -11,9 +11,9 @@ output:
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## 0. Dati
+## 0. Data
 
-Si riparte dallo stesso train set stratificato usato in `01_conjugate_baseline.Rmd`.
+We start from the same stratified training set used in `01_conjugate_baseline.Rmd`.
 
 ```{r libraries}
 library(rjags)
@@ -27,10 +27,10 @@ train$cabin_class <- factor(train$cabin_class, levels = c("Eco", "Eco Plus", "Bu
 y <- as.numeric(train$satisfaction == "satisfied")
 n <- length(y)
 
-cat("n =", n, " | satisfatti =", sum(y), "\n")
+cat("n =", n, " | satisfied =", sum(y), "\n")
 ```
 
-## 1. Modello 0: solo intercetta
+## 1. Model 0: intercept only
 
 Before adding any covariates, let's verify JAGS environment is working
 with the simplest model possible
@@ -62,28 +62,38 @@ update(jm, n.iter = 1000)
 samples <- coda.samples(jm, variable.names = c("beta0", "p"), n.iter = 5000)
 ```
 
-## 3. Diagnostica
+## 3. Diagnostics
 
 ```{r diagnostics-intercept-only}
 plot(samples[, "beta0"])
 gelman.diag(samples)
 effectiveSize(samples)
+
+# Save the intercept trace + density for the report appendix. beta0 is usually
+# the slowest-mixing parameter in a regression, so it is the one worth showing.
+dir.create("figs", showWarnings = FALSE)
+png("figs/trace_intercept.png", width = 8, height = 3.2, units = "in", res = 150)
+plot(samples[, "beta0"])
+invisible(dev.off())
 ```
 
-## 4. Confronto con la baseline coniugata (sezione 1)
+## 4. Comparison with the conjugate baseline (Section 1)
 
-As a specification check, the intercept-only model's implied satisfaction rate, ilogit(β̂₀), is compared against the closed-form Beta(1,1) posterior mean from Section 1. The two estimates agree to within [X], confirming the JAGS implementation recovers the correct baseline before any covariates are introduced.
+As a check, we compare the intercept-only model's implied satisfaction rate, ilogit(β̂₀), against the closed-form Beta(1,1) posterior mean from Section 1. With $n \approx 1200$ the two priors barely differ, so the numbers should match up to Monte Carlo error. If they don't, the problem is in the JAGS code and not in the model.
 
 ```{r compare-with-section1}
 x_baseline <- sum(y)
-p_hat_baseline <- (1+x_baseline)/(2+n)
+p_hat_baseline <- (1 + x_baseline) / (2 + n)
 p_hat_jags <- mean(plogis(as.matrix(samples)[, "beta0"]))
 
-cat ("Baseline (Beta-Binomial):", round(p_hat_baseline, 4), "\n")
-cat("JAGS (Only intercept):   ", round(p_hat_jags, 4), "\n")
+cat("Baseline (Beta-Binomial):", round(p_hat_baseline, 4), "\n")
+cat("JAGS (intercept only):   ", round(p_hat_jags, 4), "\n")
+cat("Absolute difference:     ", signif(abs(p_hat_baseline - p_hat_jags), 3), "\n")
 ```
 
-## 5. Aggiunta delle covariate
+The two agree to `r signif(abs(p_hat_baseline - p_hat_jags), 2)`, so the JAGS setup recovers the right baseline before we add any covariates.
+
+## 5. Adding the covariates
 
 We extend the baseline with a Bayesian logistic regression on seven covariates identified in the Section 0 exploratory analysis: age, seat comfort rating, log-transformed flight distance, cabin class (two dummies, Economy as reference), log-transformed departure delay, the decorrelated arrival-delay residual, travel type, and customer type. Continuous covariates are centered and scaled prior to fitting. We place independent weakly-informative N(0,100) priors on the intercept and all slope coefficients, estimated via JAGS (4 chains, 1000 adaptation iterations, 2000 burn-in, 2000 retained draws per chain).
 
@@ -136,7 +146,7 @@ summary(samples_cov[, beta_cols])
 ```
 
 
-## 6. Confronto cabin_class: dummy vs ordinale
+## 6. cabin_class encoding: dummy vs. ordinal
 
 ```{r}
 train$cabin_class_ord <- as.integer(train$cabin_class)
@@ -154,7 +164,7 @@ jags_data_ord <- list(y = y, X = X_ord, n = n, p_cov = p_cov_ord)
 
 set.seed(2026)
 jm_ord <- jags.model(textConnection(model_string_cov), data = jags_data_ord,
-                      n.chains = 4, n.adapt = 1000)   # model_string_cov  generico
+                      n.chains = 4, n.adapt = 1000)   # model_string_cov is generic: it reads whatever X is passed in
 
 update(jm_ord, n.iter = 2000)
 
@@ -162,7 +172,6 @@ samples_ord <- coda.samples(jm_ord, variable.names = c("beta0", "beta", "log_lik
                              n.iter = 2000)
 ```
 ```{r}
-install.packages("loo")
 library(loo)
 
 extract_ll <- function(samples) {
@@ -170,15 +179,15 @@ extract_ll <- function(samples) {
   m[, grep("^log_lik\\[", colnames(m))]
 }
 
-waic_cov <- waic(extract_ll(samples_cov))   # sezione 5: dummy
-waic_ord <- waic(extract_ll(samples_ord))   # sezione 6: ordinale
+waic_cov <- waic(extract_ll(samples_cov))   # Section 5: dummy encoding
+waic_ord <- waic(extract_ll(samples_ord))   # Section 6: ordinal encoding
 
-loo_compare(waic_cov, waic_ord)
-loo_compare(list(dummy = waic_cov, ordinale = waic_ord))
+# Named list so the comparison table labels the rows, rather than model1/model2
+loo_compare(list(dummy = waic_cov, ordinal = waic_ord))
 ```
 Comparing the two cabin-class encodings via WAIC, the dummy-coded specification is preferred over the ordinal score (elpd_diff = 6.4, SE = 3.5), consistent with the coefficient pattern in Section 5: satisfaction jumps sharply for Business class but does not differ meaningfully between Economy and Economy Plus, violating the equal-spacing assumption an ordinal encoding imposes. The preference is moderate rather than decisive (elpd_diff/se_diff ≈ 1.8), so we retain the dummy encoding as the primary specification.
 
-## 7. Confronto link: logit vs probit
+## 7. Link function: logit vs. probit
 
 ```{r}
 model_string_probit <- "
@@ -208,6 +217,6 @@ samples_probit <- coda.samples(jm_probit, variable.names = c("beta0", "beta", "l
 ```{r}
 waic_probit <- waic(extract_ll(samples_probit))
 
-loo_compare(waic_cov, waic_probit)
+loo_compare(list(logit = waic_cov, probit = waic_probit))
 ```
 Comparing the logit and probit link functions via WAIC yields an elpd_diff of only -0.8 (SE = 0.6) — well within the range where loo's own diagnostics flag the difference as too small to distinguish reliably. The two link functions are therefore predictively equivalent for this specification, as expected given their near-identical shape; we retain the logit link going forward for its more direct interpretability (coefficients read as log-odds).
