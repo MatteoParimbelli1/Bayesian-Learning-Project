@@ -1,0 +1,266 @@
+---
+title: "Section 6 — Prediction and Validation"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+## Motivation
+
+Sections 2–4 fit three models on the training subsample — a flat-prior JAGS
+logistic regression, a horseshoe-shrinkage JAGS logistic regression, and
+BAS's `bas.glm` — and Section 5 showed the horseshoe fits the *training*
+data decisively better once complexity is penalized (WAIC/PSIS-LOO). None
+of the three has touched the held-out test set yet, so none of that is a
+genuine test of generalization. This section is that test.
+
+For each test customer, the predicted probability is the **posterior mean**
+of $\text{logit}^{-1}(\beta_0 + x_i^\top\beta)$, averaged over posterior
+draws — not $\text{logit}^{-1}$ evaluated once at the posterior mean of
+$\beta$. These differ because the logit link is nonlinear
+($\mathbb E[g(\theta)] \neq g(\mathbb E[\theta])$ for nonlinear $g$), and
+only the draw-averaged version is the actual posterior predictive mean.
+Predictions are classified at a 0.5 cutoff and reported as accuracy and a
+confusion matrix.
+
+
+
+```{r setup-packages}
+rm(list = ls())
+set.seed(2026)
+
+library(rjags)
+library(coda)
+library(BAS)
+```
+
+## Load train and test, align factor levels
+
+Test must reuse train's exact factor levels. A different level ordering
+changes `model.matrix()`'s dummy coding — same variable, different columns
+— and every coefficient from Sections 2–4 would get silently misapplied.
+
+```{r load-data}
+train <- read.csv("data/train_subsample.csv", stringsAsFactors = FALSE)
+names(train) <- make.names(names(train), unique = TRUE)
+
+test <- read.csv("data/test_holdout.csv", stringsAsFactors = FALSE)
+names(test) <- make.names(names(test), unique = TRUE)
+
+stopifnot(all(names(train) %in% names(test)))
+
+train$satisfaction  <- factor(train$satisfaction, levels = c("dissatisfied", "satisfied"))
+train$customer_type <- factor(train$customer_type)
+train$travel_type   <- factor(train$travel_type)
+train$cabin_class   <- factor(train$cabin_class, levels = c("Eco", "Eco Plus", "Business"))
+
+test$satisfaction  <- factor(test$satisfaction,  levels = levels(train$satisfaction))
+test$customer_type <- factor(test$customer_type, levels = levels(train$customer_type))
+test$travel_type   <- factor(test$travel_type,   levels = levels(train$travel_type))
+test$cabin_class   <- factor(test$cabin_class,   levels = levels(train$cabin_class))
+
+n_train <- nrow(train)
+n_test  <- nrow(test)
+```
+
+## Standardize test using train's center/scale
+
+The held-out set's own mean/sd never touches model fitting or evaluation —
+reusing train's center/scale is what makes this an honest leakage-free test.
+
+```{r standardize}
+standardize_with_train <- function(train_raw, test_raw) {
+  ctr <- mean(train_raw); scl <- sd(train_raw)
+  list(train_z = (train_raw - ctr) / scl, test_z = (test_raw - ctr) / scl)
+}
+
+fd  <- standardize_with_train(log1p(train$flight_distance), log1p(test$flight_distance))
+dd  <- standardize_with_train(log1p(train$dep_delay),       log1p(test$dep_delay))
+ade <- standardize_with_train(train$arr_delay_extra,        test$arr_delay_extra)
+ag  <- standardize_with_train(train$age,                    test$age)
+sc  <- standardize_with_train(train$seat_comfort,            test$seat_comfort)
+
+train$flight_distance_z <- fd$train_z; test$flight_distance_z <- fd$test_z
+train$dep_delay_z       <- dd$train_z; test$dep_delay_z       <- dd$test_z
+train$arr_delay_extra_z <- ade$train_z; test$arr_delay_extra_z <- ade$test_z
+train$age_z             <- ag$train_z; test$age_z             <- ag$test_z
+train$seat_comfort_z    <- sc$train_z; test$seat_comfort_z    <- sc$test_z
+
+extra_service_items <- c("time_convenient", "food_drink", "gate_location", "wifi",
+                          "entertainment", "online_support", "ease_booking",
+                          "onboard_service", "legroom", "baggage", "checkin",
+                          "cleanliness", "online_boarding")
+
+for (v in extra_service_items) {
+  sv <- standardize_with_train(train[[v]], test[[v]])
+  train[[paste0(v, "_z")]] <- sv$train_z
+  test[[paste0(v, "_z")]]  <- sv$test_z
+}
+extra_service_z <- paste0(extra_service_items, "_z")
+```
+
+## Design matrices
+
+Same formulas as Sections 2 and 3, applied to both train and test, with a
+hard check that the resulting column names line up exactly before either
+matrix touches a model.
+
+```{r design-matrices}
+flat_formula <- ~ age_z + seat_comfort_z + flight_distance_z + cabin_class +
+                    dep_delay_z + arr_delay_extra_z + travel_type + customer_type
+
+X_train_flat <- model.matrix(flat_formula, data = train)[, -1]
+X_test_flat  <- model.matrix(flat_formula, data = test)[, -1]
+stopifnot(identical(colnames(X_train_flat), colnames(X_test_flat)))
+
+hs_formula <- as.formula(paste(
+  "~ age_z + seat_comfort_z + flight_distance_z + cabin_class +",
+  "dep_delay_z + arr_delay_extra_z + travel_type + customer_type +",
+  paste(extra_service_z, collapse = " + ")
+))
+
+X_train_hs <- model.matrix(hs_formula, data = train)[, -1]
+X_test_hs  <- model.matrix(hs_formula, data = test)[, -1]
+stopifnot(identical(colnames(X_train_hs), colnames(X_test_hs)))
+
+y_train <- as.numeric(train$satisfaction == "satisfied")
+y_test  <- as.numeric(test$satisfaction  == "satisfied")
+```
+
+## Posterior draws: flat (fresh refit), horseshoe and BAS (reloaded)
+
+The flat model is refit here without `log_lik` (not needed for prediction,
+and it's the expensive part of the Section 5 version — dropping it keeps
+this fast). The horseshoe posterior and the BAS fit are reused directly from
+the `.rds` files Sections 3 and 4 already saved.
+
+```{r fit-flat, cache=TRUE}
+p_flat <- ncol(X_train_flat)
+
+model_string_flat <- "
+model {
+  for (i in 1:ntr) {
+    y[i] ~ dbern(p[i])
+    logit(p[i]) <- beta0 + inprod(X[i,], beta[])
+  }
+  beta0 ~ dnorm(0, 0.01)
+  for (j in 1:p_flat) { beta[j] ~ dnorm(0, 0.01) }
+}
+"
+jm_flat <- jags.model(textConnection(model_string_flat),
+                       data = list(y = y_train, X = X_train_flat, ntr = n_train, p_flat = p_flat),
+                       n.chains = 4, n.adapt = 1000)
+update(jm_flat, n.iter = 2000)
+samples_flat <- coda.samples(jm_flat, variable.names = c("beta0", "beta"), n.iter = 2000)
+flat_mat <- as.matrix(samples_flat)
+
+beta0_flat <- flat_mat[, "beta0"]
+beta_flat  <- flat_mat[, paste0("beta[", seq_len(p_flat), "]")]
+```
+
+```{r load-hs-bas}
+samples_hs <- readRDS("data/samples_hs.rds")
+hs_mat     <- as.matrix(samples_hs)
+p_hs       <- ncol(X_train_hs)
+
+beta0_hs <- hs_mat[, "beta0"]
+beta_hs  <- hs_mat[, paste0("beta[", seq_len(p_hs), "]")]
+
+bas_glm_fit <- readRDS("data/bas_glm_fit.rds")
+```
+
+## Posterior-mean predicted probability, averaged over draws
+
+Done in batches over posterior draws rather than all at once — at
+`r format(n_test, big.mark = ",")` test rows, materializing a full
+`n_test`$\times S$ matrix for the flat model's 8,000 draws would run into
+several GB in one allocation. Batching keeps memory bounded regardless of
+how many draws either chain has.
+
+```{r predict-function}
+posterior_mean_prob <- function(X_test, beta0_samples, beta_samples, batch_size = 200) {
+  n_test <- nrow(X_test)
+  S <- length(beta0_samples)
+  prob_sum <- numeric(n_test)
+  starts <- seq(1, S, by = batch_size)
+  for (s0 in starts) {
+    s1  <- min(s0 + batch_size - 1, S)
+    eta <- outer(rep(1, n_test), beta0_samples[s0:s1]) +
+             X_test %*% t(beta_samples[s0:s1, , drop = FALSE])
+    prob_sum <- prob_sum + rowSums(plogis(eta))
+  }
+  prob_sum / S
+}
+
+p_flat_test <- posterior_mean_prob(X_test_flat, beta0_flat, beta_flat)
+p_hs_test   <- posterior_mean_prob(X_test_hs,   beta0_hs,   beta_hs)
+
+# predict.bas already does BMA-averaging internally — no manual draw loop needed here
+bas_pred   <- predict(bas_glm_fit, newdata = test, type = "response", estimator = "BMA")
+p_bas_test <- bas_pred$fit
+```
+
+## Evaluation: accuracy and confusion matrix at a 0.5 cutoff
+
+```{r evaluate}
+evaluate_predictions <- function(p_hat, y_true) {
+  pred <- ifelse(p_hat >= 0.5, 1, 0)
+  cm  <- table(Predicted = pred, Actual = y_true)
+  acc <- mean(pred == y_true)
+  list(confusion = cm, accuracy = acc)
+}
+
+res_flat <- evaluate_predictions(p_flat_test, y_test)
+res_hs   <- evaluate_predictions(p_hs_test,   y_test)
+res_bas  <- evaluate_predictions(p_bas_test,  y_test)
+
+cat("Flat model:\n");      print(res_flat$confusion)
+cat("\nHorseshoe model:\n"); print(res_hs$confusion)
+cat("\nBAS bas.glm:\n");     print(res_bas$confusion)
+
+summary_df <- data.frame(
+  Model    = c("Flat (9 predictors)", "Horseshoe (22 predictors)", "BAS bas.glm"),
+  Accuracy = c(res_flat$accuracy, res_hs$accuracy, res_bas$accuracy)
+)
+print(summary_df)
+```
+
+```{r interpretation-setup, include=FALSE}
+acc_tab    <- summary_df[order(-summary_df$Accuracy), ]
+best_model <- acc_tab$Model[1]
+best_acc   <- acc_tab$Accuracy[1]
+worst_acc  <- acc_tab$Accuracy[nrow(acc_tab)]
+acc_spread <- 100 * (best_acc - worst_acc)
+```
+
+## Results
+
+On the held-out test set of `r format(n_test, big.mark = ",")` customers —
+untouched during fitting, standardization, or variable selection — accuracy
+at a 0.5 cutoff is `r sprintf("%.1f%%", 100 * res_flat$accuracy)` for the
+flat model, `r sprintf("%.1f%%", 100 * res_hs$accuracy)` for the horseshoe
+model, and `r sprintf("%.1f%%", 100 * res_bas$accuracy)` for BAS's
+`bas.glm`. The best-performing model on this held-out set is
+**`r best_model`**, at `r sprintf("%.1f%%", 100 * best_acc)`; the full
+spread across all three is `r sprintf("%.1f", acc_spread)` percentage
+points.
+
+This is worth reading against Section 5 rather than in isolation: WAIC and
+PSIS-LOO there favored the horseshoe decisively *in-sample*, on the
+training data it was fit to. Whether that advantage survives contact with
+genuinely new customers is exactly what this section tests — and the
+honest reading is whichever way the numbers land here, not an assumption
+that the WAIC winner must also win the accuracy comparison. A model with
+13 extra predictors has more room to overfit the training subsample even
+under a shrinkage prior; if its test accuracy comes in close to or below
+the flat model's despite the large WAIC gap, that gap says more about
+in-sample fit than out-of-sample generalization, and the report should say
+so plainly rather than picking the in-sample winner by default.
+
+The confusion matrices above give the raw counts behind each accuracy
+figure — worth a glance for whether errors lean toward false positives or
+false negatives for any one model, even without computing precision/recall
+formally, since the outcome here is close to balanced and a lopsided error
+pattern would be the more interesting thing to flag qualitatively.
