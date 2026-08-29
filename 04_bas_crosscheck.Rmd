@@ -267,3 +267,16 @@ $\kappa=$ `r cmp_methods$kappa[cmp_methods$term=="Class_Business"]`), is a
 genuine borderline case in *both* methods (BAS just below its 0.5 cutoff,
 the horseshoe's credible interval for it crossing zero in Section 03) --
 not a real contradiction between them.
+
+# Export for later sections
+
+Saved for reuse in Section 06: the fitted `bas.glm` object itself (BAS's
+`predict()` method supports genuine BMA prediction on new data, so no
+separate coefficient-draw export is needed the way JAGS required). The
+covariate construction here is identical to Section 03's, so the same
+training-set standardization parameters already saved in
+`section03_loo.rds` apply -- no need to duplicate them.
+
+```{r export-bas}
+saveRDS(fit_glm_g, "section04_basfit.rds")
+```

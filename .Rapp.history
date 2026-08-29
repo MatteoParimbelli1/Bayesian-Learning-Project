@@ -1,1 +1,10 @@
 load("/Users/matteoparimbelli/Desktop/Politecnico/Bayesian_Learning/airline_project/airline_full_clean.rds")
+load("/Users/matteoparimbelli/Desktop/Politecnico/Bayesian_Learning/airline_project/section02_loo.rds")
+load("/Users/matteoparimbelli/Desktop/Politecnico/Bayesian_Learning/airline_project/section02_loo.rds")
+s2 <- readRDS("/Users/matteoparimbelli/Desktop/Politecnico/Bayesian_Learning/airline_project/section02_loo.rds")#
+names(s2)
+load("/Users/matteoparimbelli/Desktop/Politecnico/Bayesian_Learning/airline_project/section03_loo.rds")
+> s3 <- readRDS("/Users/matteoparimbelli/Desktop/Politecnico/Bayesian_Learning/airline_project/section03_loo.rds")#
+> names(s23)
+s3 <- readRDS("/Users/matteoparimbelli/Desktop/Politecnico/Bayesian_Learning/airline_project/section03_loo.rds")
+names(s3)

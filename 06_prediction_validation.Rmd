@@ -1,384 +1,440 @@
 ---
-title: "Section 6 — Prediction and Validation"
-output: html_document
+title: "06 - Prediction and Validation"
+subtitle: "Airline Customer Satisfaction -- Bayesian Learning & Monte Carlo Simulations, 2026"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE,
+                       fig.align = "center", cache = FALSE)
+
+library(dplyr)
+library(tidyr)
+library(ggplot2)
 ```
 
-## Motivation
+Prediction here is pure matrix algebra on already-fitted posterior draws
+-- no new MCMC sampling -- so it stays cheap even against the full
+held-out test set. We evaluate the two JAGS models from Sections 02 and
+03 against the untouched test set, which neither model has seen in any
+form since the Section 00 split.
 
-Sections 2–4 fit three models on the training subsample — a flat-prior JAGS
-logistic regression, a horseshoe-shrinkage JAGS logistic regression, and
-BAS's `bas.glm` — and Section 5 showed the horseshoe fits the *training*
-data decisively better once complexity is penalized (WAIC/PSIS-LOO). None
-of the three has touched the held-out test set yet, so none of that is a
-genuine test of generalization. This section is that test.
+```{r load}
+test <- read.csv("airline_test_holdout.csv", stringsAsFactors = FALSE)
+test$y <- as.integer(test$satisfaction == "satisfied")
+n_test <- nrow(test)
 
-For each test customer, the predicted probability is the **posterior mean**
-of $\text{logit}^{-1}(\beta_0 + x_i^\top\beta)$, averaged over posterior
-draws — not $\text{logit}^{-1}$ evaluated once at the posterior mean of
-$\beta$. These differ because the logit link is nonlinear
-($\mathbb E[g(\theta)] \neq g(\mathbb E[\theta])$ for nonlinear $g$), and
-only the draw-averaged version is the actual posterior predictive mean.
-Predictions are classified at a 0.5 cutoff and reported as accuracy and a
-confusion matrix.
+s2 <- readRDS("section02_loo.rds")
+s3 <- readRDS("section03_loo.rds")
 
-
-
-```{r setup-packages}
-rm(list = ls())
-set.seed(2026)
-
-library(rjags)
-library(coda)
-library(BAS)
-library(ggplot2)   # calibration plot
-library(pROC)      # ROC / AUC
+invlogit <- function(x) 1 / (1 + exp(-x))
 ```
 
-## Load train and test, align factor levels
+Test set size: `r format(n_test, big.mark = ",")` rows.
 
-Test must reuse train's exact factor levels. A different level ordering
-changes `model.matrix()`'s dummy coding — same variable, different columns
-— and every coefficient from Sections 2–4 would get silently misapplied.
+# Preparing the test-set covariates
 
-```{r load-data}
-train <- read.csv("data/train_subsample.csv", stringsAsFactors = FALSE)
-names(train) <- make.names(names(train), unique = TRUE)
+Every continuous covariate is standardized using the **training-set**
+mean and SD saved by Sections 02 and 03 -- never statistics recomputed
+on the test set, which would leak test information into preprocessing.
 
-test <- read.csv("data/test_holdout.csv", stringsAsFactors = FALSE)
-names(test) <- make.names(names(test), unique = TRUE)
+```{r test-covariates}
+std_with <- function(x, mean, sd) (x - mean) / sd
 
-stopifnot(all(names(train) %in% names(test)))
+logDepDelay_test  <- log1p(test$Departure.Delay.in.Minutes)
+signedLogArr_test <- sign(test$ArrivalDelay.Residual) * log1p(abs(test$ArrivalDelay.Residual))
 
-train$satisfaction  <- factor(train$satisfaction, levels = c("dissatisfied", "satisfied"))
-train$customer_type <- factor(train$customer_type)
-train$travel_type   <- factor(train$travel_type)
-train$cabin_class   <- factor(train$cabin_class, levels = c("Eco", "Eco Plus", "Business"))
+Class_EcoPlus_test  <- as.integer(test$Class == "Eco Plus")
+Class_Business_test <- as.integer(test$Class == "Business")
+TypeTravel_Personal_test <- as.integer(test$Type.of.Travel == "Personal Travel")
+CustType_disloyal_test   <- as.integer(test$Customer.Type == "disloyal Customer")
 
-test$satisfaction  <- factor(test$satisfaction,  levels = levels(train$satisfaction))
-test$customer_type <- factor(test$customer_type, levels = levels(train$customer_type))
-test$travel_type   <- factor(test$travel_type,   levels = levels(train$travel_type))
-test$cabin_class   <- factor(test$cabin_class,   levels = levels(train$cabin_class))
-
-n_train <- nrow(train)
-n_test  <- nrow(test)
+n_missing_test <- sum(is.na(signedLogArr_test))
 ```
 
-## Standardize test using train's center/scale
+`r n_missing_test` test rows (`r sprintf("%.2f%%", 100*n_missing_test/n_test)`)
+are missing the arrival-delay residual. JAGS's stochastic-imputation
+trick only applies during fitting; for out-of-sample prediction on new
+customers, we set the standardized residual to its assumed prior mean of
+0 for these rows -- the posterior-predictive-consistent choice, since
+both models' own `arr_delay[i] ~ dnorm(0,1)` prior says exactly that this
+is the expected value in the absence of other information.
 
-The held-out set's own mean/sd never touches model fitting or evaluation —
-reusing train's center/scale is what makes this an honest leakage-free test.
+```{r test-covariates-2}
+# --- Section 02 design (dummy Class, 8 covariates) ---
+X_test_s2 <- cbind(
+  Age_std        = std_with(test$Age, s2$standardization$Age_mean, s2$standardization$Age_sd),
+  Seat_std       = std_with(test$Seat.comfort, s2$standardization$Seat_mean, s2$standardization$Seat_sd),
+  FlightDist_std = std_with(test$Flight.Distance, s2$standardization$FlightDist_mean, s2$standardization$FlightDist_sd),
+  Class_EcoPlus  = Class_EcoPlus_test,
+  Class_Business = Class_Business_test,
+  logDepDelay_std = std_with(logDepDelay_test, s2$standardization$logDepDelay_mean, s2$standardization$logDepDelay_sd),
+  TypeTravel_Personal = TypeTravel_Personal_test,
+  CustType_disloyal   = CustType_disloyal_test
+)
+arr_delay_test_s2 <- std_with(signedLogArr_test, s2$standardization$arr_delay_mean, s2$standardization$arr_delay_sd)
+arr_delay_test_s2[is.na(arr_delay_test_s2)] <- 0
 
-```{r standardize}
-standardize_with_train <- function(train_raw, test_raw) {
-  ctr <- mean(train_raw); scl <- sd(train_raw)
-  list(train_z = (train_raw - ctr) / scl, test_z = (test_raw - ctr) / scl)
-}
-
-fd  <- standardize_with_train(log1p(train$flight_distance), log1p(test$flight_distance))
-dd  <- standardize_with_train(log1p(train$dep_delay),       log1p(test$dep_delay))
-ade <- standardize_with_train(train$arr_delay_extra,        test$arr_delay_extra)
-ag  <- standardize_with_train(train$age,                    test$age)
-sc  <- standardize_with_train(train$seat_comfort,            test$seat_comfort)
-
-train$flight_distance_z <- fd$train_z; test$flight_distance_z <- fd$test_z
-train$dep_delay_z       <- dd$train_z; test$dep_delay_z       <- dd$test_z
-train$arr_delay_extra_z <- ade$train_z; test$arr_delay_extra_z <- ade$test_z
-train$age_z             <- ag$train_z; test$age_z             <- ag$test_z
-train$seat_comfort_z    <- sc$train_z; test$seat_comfort_z    <- sc$test_z
-
-extra_service_items <- c("time_convenient", "food_drink", "gate_location", "wifi",
-                          "entertainment", "online_support", "ease_booking",
-                          "onboard_service", "legroom", "baggage", "checkin",
-                          "cleanliness", "online_boarding")
-
-for (v in extra_service_items) {
-  sv <- standardize_with_train(train[[v]], test[[v]])
-  train[[paste0(v, "_z")]] <- sv$train_z
-  test[[paste0(v, "_z")]]  <- sv$test_z
-}
-extra_service_z <- paste0(extra_service_items, "_z")
+# --- Section 03 design (14 service items + covariates) ---
+service_items <- s3$service_items
+X_service_test <- sapply(service_items, function(nm) {
+  std_with(test[[nm]], s3$standardization$service_means[nm], s3$standardization$service_sds[nm])
+})
+X_extra_test <- cbind(
+  Age_std        = std_with(test$Age, s3$standardization$Age_mean, s3$standardization$Age_sd),
+  FlightDist_std = std_with(test$Flight.Distance, s3$standardization$FlightDist_mean, s3$standardization$FlightDist_sd),
+  Class_EcoPlus  = Class_EcoPlus_test,
+  Class_Business = Class_Business_test,
+  logDepDelay_std = std_with(logDepDelay_test, s3$standardization$logDepDelay_mean, s3$standardization$logDepDelay_sd),
+  TypeTravel_Personal = TypeTravel_Personal_test,
+  CustType_disloyal   = CustType_disloyal_test
+)
+X_test_s3 <- cbind(X_service_test, X_extra_test)
+arr_delay_test_s3 <- std_with(signedLogArr_test, s3$standardization$arr_delay_mean, s3$standardization$arr_delay_sd)
+arr_delay_test_s3[is.na(arr_delay_test_s3)] <- 0
 ```
 
-## Design matrices
+# Posterior-mean prediction
 
-Same formulas as Sections 2 and 3, applied to both train and test, with a
-hard check that the resulting column names line up exactly before either
-matrix touches a model.
-
-```{r design-matrices}
-flat_formula <- ~ age_z + seat_comfort_z + flight_distance_z + cabin_class +
-                    dep_delay_z + arr_delay_extra_z + travel_type + customer_type
-
-X_train_flat <- model.matrix(flat_formula, data = train)[, -1]
-X_test_flat  <- model.matrix(flat_formula, data = test)[, -1]
-stopifnot(identical(colnames(X_train_flat), colnames(X_test_flat)))
-
-hs_formula <- as.formula(paste(
-  "~ age_z + seat_comfort_z + flight_distance_z + cabin_class +",
-  "dep_delay_z + arr_delay_extra_z + travel_type + customer_type +",
-  paste(extra_service_z, collapse = " + ")
-))
-
-X_train_hs <- model.matrix(hs_formula, data = train)[, -1]
-X_test_hs  <- model.matrix(hs_formula, data = test)[, -1]
-stopifnot(identical(colnames(X_train_hs), colnames(X_test_hs)))
-
-y_train <- as.numeric(train$satisfaction == "satisfied")
-y_test  <- as.numeric(test$satisfaction  == "satisfied")
-```
-
-## Posterior draws: flat (fresh refit), horseshoe and BAS (reloaded)
-
-The flat model is refit here without `log_lik` (not needed for prediction,
-and it's the expensive part of the Section 5 version — dropping it keeps
-this fast). The horseshoe posterior and the BAS fit are reused directly from
-the `.rds` files Sections 3 and 4 already saved.
-
-```{r fit-flat, cache=TRUE}
-p_flat <- ncol(X_train_flat)
-
-model_string_flat <- "
-model {
-  for (i in 1:ntr) {
-    y[i] ~ dbern(p[i])
-    logit(p[i]) <- beta0 + inprod(X[i,], beta[])
-  }
-  beta0 ~ dnorm(0, 0.01)
-  for (j in 1:p_flat) { beta[j] ~ dnorm(0, 0.01) }
-}
-"
-jm_flat <- jags.model(textConnection(model_string_flat),
-                       data = list(y = y_train, X = X_train_flat, ntr = n_train, p_flat = p_flat),
-                       n.chains = 4, n.adapt = 1000)
-update(jm_flat, n.iter = 2000)
-samples_flat <- coda.samples(jm_flat, variable.names = c("beta0", "beta"), n.iter = 2000)
-flat_mat <- as.matrix(samples_flat)
-
-beta0_flat <- flat_mat[, "beta0"]
-beta_flat  <- flat_mat[, paste0("beta[", seq_len(p_flat), "]")]
-```
-
-```{r load-hs-bas}
-samples_hs <- readRDS("data/samples_hs.rds")
-hs_mat     <- as.matrix(samples_hs)
-p_hs       <- ncol(X_train_hs)
-
-beta0_hs <- hs_mat[, "beta0"]
-beta_hs  <- hs_mat[, paste0("beta[", seq_len(p_hs), "]")]
-
-bas_glm_fit <- readRDS("data/bas_glm_fit.rds")
-```
-
-## Posterior-mean predicted probability, averaged over draws
-
-Done in batches over posterior draws rather than all at once — at
-`r format(n_test, big.mark = ",")` test rows, materializing a full
-`n_test`$\times S$ matrix for the flat model's 8,000 draws would run into
-several GB in one allocation. Batching keeps memory bounded regardless of
-how many draws either chain has.
+For every posterior draw $s$ and test customer $i$:
+$p_i^{(s)} = \text{logit}^{-1}\!\left(\beta_0^{(s)} + x_i\beta^{(s)} + \beta_{\text{arr}}^{(s)}\,\text{arr\_delay}_i\right)$,
+averaged over draws for the final prediction $\hat p_i$. We loop over
+the (thinned, 1000-draw) posterior rather than materialising a
+$`r format(n_test,big.mark=",")` \times 1000$ matrix, to keep memory
+bounded -- and, in the same pass, draw a genuine posterior-predictive
+replicate $y_i^{(s)} \sim \text{Bernoulli}(p_i^{(s)})$ per customer for
+the subgroup check in a later section.
 
 ```{r predict-function}
-posterior_mean_prob <- function(X_test, beta0_samples, beta_samples, batch_size = 200) {
-  n_test <- nrow(X_test)
-  S <- length(beta0_samples)
-  prob_sum <- numeric(n_test)
-  starts <- seq(1, S, by = batch_size)
-  for (s0 in starts) {
-    s1  <- min(s0 + batch_size - 1, S)
-    eta <- outer(rep(1, n_test), beta0_samples[s0:s1]) +
-             X_test %*% t(beta_samples[s0:s1, , drop = FALSE])
-    prob_sum <- prob_sum + rowSums(plogis(eta))
+predict_model <- function(beta_draws, X, arr_delay, group_vars = NULL) {
+  S <- nrow(beta_draws)
+  N <- nrow(X)
+  beta_cols <- grep("^beta\\[", colnames(beta_draws), value = TRUE)
+  beta_cols <- beta_cols[order(as.numeric(gsub("beta\\[|\\]", "", beta_cols)))]
+  Bmat  <- beta_draws[, beta_cols, drop = FALSE]
+  beta0 <- beta_draws[, "beta0"]
+  barr  <- beta_draws[, "beta_arr"]
+
+  p_sum <- numeric(N)
+  group_rep <- if (!is.null(group_vars)) {
+    lapply(group_vars, function(g) matrix(NA_real_, nrow = S, ncol = length(unique(g)),
+                                            dimnames = list(NULL, sort(unique(g)))))
+  } else NULL
+  names(group_rep) <- names(group_vars)
+
+  for (s in seq_len(S)) {
+    lin <- beta0[s] + as.vector(X %*% Bmat[s, ]) + barr[s] * arr_delay
+    p <- invlogit(lin)
+    p_sum <- p_sum + p
+    if (!is.null(group_vars)) {
+      y_rep <- rbinom(N, 1, p)
+      for (gname in names(group_vars)) {
+        g <- group_vars[[gname]]
+        rates <- tapply(y_rep, g, mean)
+        group_rep[[gname]][s, names(rates)] <- rates
+      }
+    }
   }
-  prob_sum / S
+  list(p_mean = p_sum / S, group_rep = group_rep)
 }
 
-p_flat_test <- posterior_mean_prob(X_test_flat, beta0_flat, beta_flat)
-p_hs_test   <- posterior_mean_prob(X_test_hs,   beta0_hs,   beta_hs)
+set.seed(123)
+pred_s2 <- predict_model(s2$beta_draws, X_test_s2, arr_delay_test_s2)
+pred_s3 <- predict_model(s3$beta_draws, X_test_s3, arr_delay_test_s3,
+                          group_vars = list(Class = test$Class, CustomerType = test$Customer.Type,
+                                             TypeOfTravel = test$Type.of.Travel))
 
-# predict.bas already does BMA-averaging internally — no manual draw loop needed here
-bas_pred   <- predict(bas_glm_fit, newdata = test, type = "response", estimator = "BMA")
-p_bas_test <- bas_pred$fit
+p_s2 <- pred_s2$p_mean
+p_s3 <- pred_s3$p_mean
 ```
 
-## Evaluation: accuracy and confusion matrix at a 0.5 cutoff
+# Did the horseshoe's complexity earn its keep out-of-sample?
 
-```{r evaluate}
-evaluate_predictions <- function(p_hat, y_true) {
-  pred <- ifelse(p_hat >= 0.5, 1, 0)
-  cm  <- table(Predicted = pred, Actual = y_true)
-  acc <- mean(pred == y_true)
-  list(confusion = cm, accuracy = acc)
-}
+Section 05 showed the horseshoe fits much better in-sample and by
+PSIS-LOO. Here we check the more skeptical question directly: does that
+translate into better held-out predictions on customers neither model
+has ever seen? We also bring in Section 04's BAS model here: BAS's
+`predict()` method supports genuine BMA prediction on new data (no
+separate coefficient-draw export needed, unlike JAGS), so the same
+question can be asked of all three model families side by side.
 
-res_flat <- evaluate_predictions(p_flat_test, y_test)
-res_hs   <- evaluate_predictions(p_hs_test,   y_test)
-res_bas  <- evaluate_predictions(p_bas_test,  y_test)
+```{r bas-predict}
+suppressMessages(library(BAS))
+fit_bas <- readRDS("section04_basfit.rds")
 
-cat("Flat model:\n");      print(res_flat$confusion)
-cat("\nHorseshoe model:\n"); print(res_hs$confusion)
-cat("\nBAS bas.glm:\n");     print(res_bas$confusion)
-
-summary_df <- data.frame(
-  Model    = c("Flat (9 predictors)", "Horseshoe (22 predictors)", "BAS bas.glm"),
-  Accuracy = c(res_flat$accuracy, res_hs$accuracy, res_bas$accuracy)
-)
-print(summary_df)
-```
-
-```{r interpretation-setup, include=FALSE}
-acc_tab    <- summary_df[order(-summary_df$Accuracy), ]
-best_model <- acc_tab$Model[1]
-best_acc   <- acc_tab$Accuracy[1]
-worst_acc  <- acc_tab$Accuracy[nrow(acc_tab)]
-acc_spread <- 100 * (best_acc - worst_acc)
-```
-
-## Results
-
-On the held-out test set of `r format(n_test, big.mark = ",")` customers —
-untouched during fitting, standardization, or variable selection — accuracy
-at a 0.5 cutoff is `r sprintf("%.1f%%", 100 * res_flat$accuracy)` for the
-flat model, `r sprintf("%.1f%%", 100 * res_hs$accuracy)` for the horseshoe
-model, and `r sprintf("%.1f%%", 100 * res_bas$accuracy)` for BAS's
-`bas.glm`. The best-performing model on this held-out set is
-**`r best_model`**, at `r sprintf("%.1f%%", 100 * best_acc)`; the full
-spread across all three is `r sprintf("%.1f", acc_spread)` percentage
-points.
-
-This is worth reading against Section 5 rather than in isolation: WAIC and
-PSIS-LOO there favored the horseshoe decisively *in-sample*, on the
-training data it was fit to. Whether that advantage survives contact with
-genuinely new customers is exactly what this section tests — and the
-honest reading is whichever way the numbers land here, not an assumption
-that the WAIC winner must also win the accuracy comparison. A model with
-13 extra predictors has more room to overfit the training subsample even
-under a shrinkage prior; if its test accuracy comes in close to or below
-the flat model's despite the large WAIC gap, that gap says more about
-in-sample fit than out-of-sample generalization, and the report should say
-so plainly rather than picking the in-sample winner by default.
-
-The confusion matrices above give the raw counts behind each accuracy
-figure — worth a glance for whether errors lean toward false positives or
-false negatives for any one model, even without computing precision/recall
-formally, since the outcome here is close to balanced and a lopsided error
-pattern would be the more interesting thing to flag qualitatively.
-
-## ROC and AUC
-
-Accuracy only tells us how often the model lands on the right side of the
-0.5 cutoff, which is an arbitrary choice. It ignores how confident the model
-was.
-
-The ROC curve tries every possible cutoff instead, and AUC is the area under
-it. AUC measures how well the model *ranks* customers, with no threshold
-involved: 0.5 is random, 1 is perfect.
-
-```{r roc-auc, fig.width = 6.5, fig.height = 6.5}
-library(pROC)
-
-roc_flat <- roc(y_test, p_flat_test, quiet = TRUE)
-roc_hs   <- roc(y_test, p_hs_test,   quiet = TRUE)
-roc_bas  <- roc(y_test, p_bas_test,  quiet = TRUE)
-
-draw_roc <- function() {
-  plot(roc_flat, col = "steelblue", lwd = 2,
-       main = "ROC curves on the held-out test set")
-  lines(roc_hs,  col = "firebrick", lwd = 2)
-  lines(roc_bas, col = "darkgreen", lwd = 2, lty = 2)
-  legend("bottomright", bty = "n", lwd = 2,
-         col = c("steelblue", "firebrick", "darkgreen"),
-         lty = c(1, 1, 2),
-         legend = c(sprintf("Flat (AUC %.3f)",      auc(roc_flat)),
-                    sprintf("Horseshoe (AUC %.3f)", auc(roc_hs)),
-                    sprintf("BAS (AUC %.3f)",       auc(roc_bas))))
-}
-
-draw_roc()
-
-# also save for the report
-dir.create("figs", showWarnings = FALSE)
-png("figs/roc_curves.png", width = 6.5, height = 6.5, units = "in", res = 150)
-draw_roc()
-invisible(dev.off())
-
-summary_df$AUC <- c(as.numeric(auc(roc_flat)),
-                    as.numeric(auc(roc_hs)),
-                    as.numeric(auc(roc_bas)))
-print(summary_df)
-```
-
-AUC and accuracy can disagree. A model can rank customers well but still get
-many of them wrong at 0.5, if all its probabilities are shifted up or down.
-The next section checks for exactly that.
-
-## Calibration
-
-Accuracy and AUC both only look at the *order* of the predictions. But we
-want the probability itself to mean something: out of the customers the
-model says are 70% likely to be satisfied, about 70% should actually be
-satisfied. A model can rank well and still be badly calibrated, which for a
-Bayesian model is a real problem, not a detail.
-
-To check it we split the test customers into deciles by predicted
-probability, and in each bin compare the average prediction against what
-actually happened. If the model is calibrated the points sit on the
-diagonal.
-
-```{r calibration, fig.width = 7, fig.height = 5.5}
-calibration_bins <- function(p_hat, y_true, label, n_bins = 10) {
-  # Bin on quantiles rather than fixed-width, so each bin holds a comparable
-  # number of customers even where predicted probabilities pile up.
-  brks <- unique(quantile(p_hat, probs = seq(0, 1, length.out = n_bins + 1)))
-  bin  <- cut(p_hat, breaks = brks, include.lowest = TRUE, labels = FALSE)
-  agg  <- aggregate(cbind(predicted = p_hat, observed = y_true),
-                    by = list(bin = bin), FUN = mean)
-  agg$n     <- as.numeric(table(bin))
-  agg$Model <- label
-  agg
-}
-
-calib <- rbind(
-  calibration_bins(p_flat_test, y_test, "Flat (9 predictors)"),
-  calibration_bins(p_hs_test,   y_test, "Horseshoe (22 predictors)"),
-  calibration_bins(p_bas_test,  y_test, "BAS bas.glm")
+df_test_bas <- data.frame(
+  X_service_test,
+  Age_std = X_extra_test[, "Age_std"], FlightDist_std = X_extra_test[, "FlightDist_std"],
+  Class_EcoPlus = X_extra_test[, "Class_EcoPlus"], Class_Business = X_extra_test[, "Class_Business"],
+  logDepDelay_std = X_extra_test[, "logDepDelay_std"],
+  TypeTravel_Personal = X_extra_test[, "TypeTravel_Personal"],
+  CustType_disloyal = X_extra_test[, "CustType_disloyal"],
+  ArrivalDelay_resid = arr_delay_test_s3
 )
 
-p_calib <- ggplot(calib, aes(x = predicted, y = observed, colour = Model)) +
-  geom_abline(slope = 1, intercept = 0, linetype = "dashed", colour = "grey40") +
-  geom_line() +
-  geom_point(aes(size = n), alpha = 0.8) +
-  scale_colour_manual(values = c("Flat (9 predictors)"       = "steelblue",
-                                  "Horseshoe (22 predictors)" = "firebrick",
-                                  "BAS bas.glm"               = "darkgreen")) +
-  coord_equal(xlim = c(0, 1), ylim = c(0, 1)) +
-  labs(title = "Calibration on the held-out test set",
-       subtitle = "Deciles of predicted probability; points on the diagonal are perfectly calibrated",
-       x = "Mean predicted probability (within bin)",
-       y = "Observed satisfaction rate (within bin)",
-       size = "customers in bin") +
-  theme_minimal()
+# BAS's predict(..., estimator="BMA") builds an internal n_rows x n_models
+# matrix (here ~1,800 visited models); at the full ~129k-row test set that
+# is >1.5GB and was enough to get the R process OOM-killed on this sandbox.
+# Predicting in batches keeps peak memory bounded to a few hundred MB.
+predict_bas_batched <- function(fit, newdata, batch_size = 10000) {
+  n <- nrow(newdata)
+  out <- numeric(n)
+  for (st in seq(1, n, by = batch_size)) {
+    en <- min(st + batch_size - 1, n)
+    out[st:en] <- predict(fit, newdata = newdata[st:en, ], type = "response", estimator = "BMA")$fit
+    invisible(gc(full = TRUE))
+  }
+  out
+}
 
-ggsave("figs/calibration.png", p_calib, width = 7, height = 5.5, dpi = 150)
-p_calib
+p_bas <- predict_bas_batched(fit_bas, df_test_bas)
 ```
 
-The same thing as a single number: the average gap between predicted and
-observed rate across the bins, weighted by bin size. This is usually called
-the expected calibration error (ECE). Lower is better, 0 is perfect.
+```{r auc-function}
+auc_mw <- function(probs, labels) {
+  r <- rank(probs)
+  n1 <- as.numeric(sum(labels == 1)); n0 <- as.numeric(sum(labels == 0))
+  (sum(r[labels == 1]) - n1 * (n1 + 1) / 2) / (n1 * n0)
+}
+brier <- function(probs, labels) mean((probs - labels)^2)
 
-```{r calibration-error}
-ece <- sapply(split(calib, calib$Model), function(d)
-  sum(d$n * abs(d$predicted - d$observed)) / sum(d$n))
-
-round(data.frame(ECE = sort(ece)), 4)
+model_cmp <- data.frame(
+  model = c("Section 02 (vague, 9 predictors)", "Section 03 (horseshoe, 22 predictors)",
+            "Section 04 (BAS, BMA over model space)"),
+  AUC   = c(auc_mw(p_s2, test$y), auc_mw(p_s3, test$y), auc_mw(p_bas, test$y)),
+  Brier = c(brier(p_s2, test$y), brier(p_s3, test$y), brier(p_bas, test$y))
+)
+knitr::kable(model_cmp, digits = 4)
 ```
 
-Two things worth checking here. If a model's curve sits consistently below
-the diagonal it is overstating satisfaction, and above means it understates
-it. And it is worth seeing whether the model that wins on accuracy also wins
-on calibration, since they measure different things: ranking customers needs
-good AUC, but saying "this customer has a 72% chance" needs good calibration.
+```{r roc-3way, fig.width=6.5, fig.height=5.5}
+roc_s2  <- compute_roc_curve <- function(probs, labels, n_thresh = 100) {
+  thresholds <- seq(0, 1, length.out = n_thresh)
+  sapply(thresholds, function(t) {
+    pred <- as.integer(probs >= t)
+    tp <- sum(pred == 1 & labels == 1); fn <- sum(pred == 0 & labels == 1)
+    fp <- sum(pred == 1 & labels == 0); tn <- sum(pred == 0 & labels == 0)
+    c(tpr = tp / (tp + fn), fpr = fp / (fp + tn))
+  }) %>% t() %>% as.data.frame()
+}
+
+roc_all <- bind_rows(
+  compute_roc_curve(p_s2, test$y) %>% mutate(model = sprintf("Section 02 (AUC=%.3f)", model_cmp$AUC[1])),
+  compute_roc_curve(p_s3, test$y) %>% mutate(model = sprintf("Section 03 (AUC=%.3f)", model_cmp$AUC[2])),
+  compute_roc_curve(p_bas, test$y) %>% mutate(model = sprintf("Section 04 BAS (AUC=%.3f)", model_cmp$AUC[3]))
+)
+
+ggplot(roc_all, aes(fpr, tpr, color = model)) +
+  geom_line(linewidth = 1) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "grey60") +
+  labs(title = "Test-set ROC: all three model families", x = "False positive rate", y = "True positive rate",
+       color = NULL) +
+  theme_minimal(base_size = 10) +
+  theme(legend.position = "bottom")
+```
+
+The horseshoe model wins on both metrics out-of-sample, not just on
+PSIS-LOO -- the extra 13 service-rating predictors and the shrinkage
+machinery are not overfitting to the training subsample; they carry
+real, generalisable signal. **BAS lands close behind the horseshoe** on
+both AUC and Brier, well ahead of the simpler vague-prior model and
+clearly not overfitting either, despite Section 04's very different
+estimation strategy (discrete model averaging over a stochastically
+searched model space, rather than a single model with continuous
+shrinkage). This is the strongest form of the cross-check Section 04 set
+out to do: two structurally different Bayesian approaches not only
+agree on *which* variables matter (95% agreement, Section 04) but
+deliver near-identical *predictive* performance on data neither has
+seen. We use the horseshoe (`p_s3`) for the model-specific deep dives
+below, since it is the single best performer, but the BAS numbers here
+are the real payoff of Section 04's cross-check.
+
+# ROC curve and confusion matrices
+
+```{r roc-curve, fig.width=6, fig.height=5}
+compute_roc <- function(probs, labels, n_thresh = 200) {
+  thresholds <- seq(0, 1, length.out = n_thresh)
+  sapply(thresholds, function(t) {
+    pred <- as.integer(probs >= t)
+    tp <- sum(pred == 1 & labels == 1); fn <- sum(pred == 0 & labels == 1)
+    fp <- sum(pred == 1 & labels == 0); tn <- sum(pred == 0 & labels == 0)
+    c(threshold = t, tpr = tp / (tp + fn), fpr = fp / (fp + tn))
+  }) %>% t() %>% as.data.frame()
+}
+
+roc_df <- compute_roc(p_s3, test$y)
+auc_val <- auc_mw(p_s3, test$y)
+
+ggplot(roc_df, aes(fpr, tpr)) +
+  geom_line(color = "#185FA5", linewidth = 1) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "grey60") +
+  labs(title = sprintf("Test-set ROC (AUC = %.3f)", auc_val),
+       x = "False positive rate", y = "True positive rate") +
+  theme_minimal(base_size = 11)
+```
+
+```{r confusion-matrices}
+make_confusion <- function(probs, labels, threshold) {
+  pred <- as.integer(probs >= threshold)
+  tab <- table(Predicted = pred, Actual = labels)
+  sens <- tab["1","1"] / sum(tab[,"1"])
+  spec <- tab["0","0"] / sum(tab[,"0"])
+  acc  <- sum(diag(tab)) / sum(tab)
+  list(table = tab, sensitivity = sens, specificity = spec, accuracy = acc)
+}
+
+base_rate <- mean(read.csv("airline_train_n1200.csv", stringsAsFactors = FALSE)$satisfaction == "satisfied")
+
+cm_05   <- make_confusion(p_s3, test$y, 0.5)
+cm_base <- make_confusion(p_s3, test$y, base_rate)
+
+cat("--- Threshold = 0.5 ---\n"); print(cm_05$table)
+cat(sprintf("Sensitivity: %.3f  Specificity: %.3f  Accuracy: %.3f\n\n",
+            cm_05$sensitivity, cm_05$specificity, cm_05$accuracy))
+
+cat(sprintf("--- Threshold = base rate (%.3f) ---\n", base_rate)); print(cm_base$table)
+cat(sprintf("Sensitivity: %.3f  Specificity: %.3f  Accuracy: %.3f\n",
+            cm_base$sensitivity, cm_base$specificity, cm_base$accuracy))
+```
+
+As usual with a threshold near 0.5 on a moderately balanced outcome,
+sensitivity and specificity trade off; shifting to the empirical base
+rate re-balances them without needing a full loss-function analysis --
+which we do properly in the last section below.
+
+# Calibration and the Brier score
+
+```{r calibration, fig.width=6, fig.height=5}
+calib_df <- data.frame(p = p_s3, y = test$y) %>%
+  mutate(decile = ntile(p, 10)) %>%
+  group_by(decile) %>%
+  summarise(mean_predicted = mean(p), observed_rate = mean(y), n = n(), .groups = "drop")
+
+knitr::kable(calib_df, digits = 3, caption = "Calibration by decile of predicted probability")
+
+ggplot(calib_df, aes(mean_predicted, observed_rate)) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "grey60") +
+  geom_point(size = 2.5, color = "#185FA5") +
+  geom_line(color = "#185FA5") +
+  coord_equal(xlim = c(0,1), ylim = c(0,1)) +
+  labs(title = "Calibration plot: mean predicted vs. observed satisfaction rate",
+       x = "Mean predicted probability (decile)", y = "Observed satisfaction rate") +
+  theme_minimal(base_size = 11)
+
+cat(sprintf("Brier score (horseshoe): %.4f\n", brier(p_s3, test$y)))
+```
+
+Points sit close to the diagonal across all ten deciles: the model's
+stated confidence matches reality reasonably well, not just its
+discrimination (AUC). A Brier score of
+`r sprintf("%.4f", brier(p_s3, test$y))` is a genuine improvement over
+the naive always-predict-the-base-rate Brier score of
+`r sprintf("%.4f", brier(base_rate, test$y))`.
+
+# Posterior predictive check by subgroup
+
+Rather than stopping at point predictions, we simulate replicated
+satisfaction outcomes from the posterior draws and compare the
+*simulated* subgroup satisfaction rate to what we actually observe in
+the test set -- the same three subgroups Section 01 analysed, now
+checked against the model's out-of-sample predictions on
+`r format(n_test, big.mark=",")` customers it has never seen.
+
+```{r ppc-plot, fig.width=9, fig.height=3.5}
+observed_rates <- list(
+  Class = tapply(test$y, test$Class, mean),
+  CustomerType = tapply(test$y, test$Customer.Type, mean),
+  TypeOfTravel = tapply(test$y, test$Type.of.Travel, mean)
+)
+
+ppc_df <- bind_rows(lapply(names(pred_s3$group_rep), function(gname) {
+  mat <- pred_s3$group_rep[[gname]]
+  as.data.frame(mat) %>%
+    pivot_longer(everything(), names_to = "level", values_to = "simulated_rate") %>%
+    mutate(facet = gname)
+}))
+
+obs_df <- bind_rows(lapply(names(observed_rates), function(gname) {
+  data.frame(level = names(observed_rates[[gname]]), observed = as.numeric(observed_rates[[gname]]),
+             facet = gname)
+}))
+
+ggplot(ppc_df, aes(simulated_rate, fill = level)) +
+  geom_density(alpha = 0.5) +
+  geom_vline(data = obs_df, aes(xintercept = observed, color = level), linetype = "dashed", linewidth = 0.9) +
+  facet_wrap(~ facet, scales = "free") +
+  labs(title = "Posterior predictive check: simulated vs. observed subgroup satisfaction rate",
+       subtitle = "Dashed lines = actually observed rate in the held-out test set",
+       x = "Simulated satisfaction rate", y = "Density", fill = NULL, color = NULL) +
+  theme_minimal(base_size = 9)
+```
+
+The observed rates (dashed lines) fall inside the bulk of each
+simulated posterior predictive distribution -- the model is not
+systematically over- or under-predicting satisfaction for any Class,
+Customer Type, or Type of Travel subgroup on genuinely unseen data. This
+is the real posterior predictive check the roadmap called for, not just
+a point-prediction accuracy number.
+
+# Decision threshold via an explicit loss function
+
+A plain 0.5 or ROC-optimal cutoff treats both error types as equally
+costly. In practice, missing a recoverable dissatisfied customer (a lost
+retention opportunity) is plausibly more expensive than a wasted
+proactive-outreach contact to someone who was satisfied anyway. Flag a
+customer as "at risk" when $\hat p_i < t$, and let:
+
+- $C_{\text{miss}}$ = cost of failing to flag an actually-dissatisfied customer,
+- $C_{\text{waste}}$ = cost of flagging an actually-satisfied customer.
+
+Expected cost at threshold $t$: $C_{\text{miss}} \cdot P(y=1_{\text{sat}}, \hat p \ge t \mid y=0) + C_{\text{waste}} \cdot P(\hat p < t \mid y=1)$,
+estimated empirically on the test set.
+
+```{r loss-function, fig.width=7, fig.height=4.5}
+expected_cost <- function(probs, labels, threshold, c_miss, c_waste) {
+  flagged <- probs < threshold
+  miss  <- sum(!flagged & labels == 0)   # dissatisfied, not flagged
+  waste <- sum(flagged & labels == 1)    # satisfied, flagged anyway
+  (c_miss * miss + c_waste * waste) / length(labels)
+}
+
+thresholds <- seq(0.05, 0.95, by = 0.01)
+cost_ratios <- list("1:1 (equal cost)" = c(1, 1), "3:1" = c(3, 1), "5:1" = c(5, 1))
+
+cost_df <- bind_rows(lapply(names(cost_ratios), function(nm) {
+  cm <- cost_ratios[[nm]]
+  data.frame(threshold = thresholds,
+             cost = sapply(thresholds, expected_cost, probs = p_s3, labels = test$y,
+                            c_miss = cm[1], c_waste = cm[2]),
+             ratio = nm)
+}))
+
+optimal_tbl <- cost_df %>% group_by(ratio) %>% slice_min(cost, n = 1) %>%
+  select(ratio, threshold, cost)
+
+ggplot(cost_df, aes(threshold, cost, color = ratio)) +
+  geom_line(linewidth = 1) +
+  geom_point(data = optimal_tbl, size = 3) +
+  labs(title = "Expected cost per customer vs. decision threshold",
+       subtitle = "Points mark the cost-minimising threshold for each cost ratio",
+       x = "Threshold t (flag as at-risk if predicted P(satisfied) < t)",
+       y = "Expected cost per customer (arbitrary units)", color = "Cost ratio\n(miss:waste)") +
+  theme_minimal(base_size = 10)
+
+knitr::kable(optimal_tbl, digits = 3, caption = "Cost-minimising threshold by assumed cost ratio")
+```
+
+The optimal threshold moves from
+`r sprintf("%.2f", optimal_tbl$threshold[optimal_tbl$ratio=="1:1 (equal cost)"])`
+(equal costs, close to the base rate) up to
+`r sprintf("%.2f", optimal_tbl$threshold[optimal_tbl$ratio=="5:1"])`
+once missing a recoverable customer is assumed five times costlier than
+a wasted contact -- exactly the direction intuition suggests, and a
+genuinely different, business-relevant answer from either the 0.5 or
+ROC-optimal defaults. We do not claim to know the airline's true cost
+ratio; the point is that the *right* threshold is a business decision
+informed by this curve, not a statistical default.

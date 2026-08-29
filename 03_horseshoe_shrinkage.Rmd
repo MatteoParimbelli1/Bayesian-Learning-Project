@@ -327,3 +327,36 @@ most confidently preserved effect in the entire model
 ($\kappa=$ `r kappa_tbl$kappa[kappa_tbl$term=="disloyal Customer"]`) --
 consistent across Sections 01, 02 and 03 regardless of how much else is
 in the model.
+
+# Export for later sections
+
+Saved for reuse in Section 05 (WAIC/PSIS-LOO) and Section 06
+(out-of-sample prediction): the compact `loo`/`waic` objects, a thinned
+set of posterior `beta` draws, and the exact training-set mean/SD for
+every continuous covariate -- so Section 06 standardizes the test set
+identically rather than leaking test statistics into preprocessing.
+
+```{r export-loo}
+loglik_mat <- sm[, grepl("^log_lik", colnames(sm))]
+loo_final <- loo::loo(loglik_mat)
+waic_final <- loo::waic(loglik_mat)
+
+keep_idx <- round(seq(1, nrow(sm), length.out = min(1000, nrow(sm))))
+beta_draws <- sm[keep_idx, c("beta0", beta_cols_only)]
+
+service_means <- colMeans(train[, service_items])
+service_sds   <- apply(train[, service_items], 2, sd)
+
+standardization <- list(
+  service_means = service_means, service_sds = service_sds,
+  Age_mean = mean(train$Age), Age_sd = sd(train$Age),
+  FlightDist_mean = mean(train$Flight.Distance), FlightDist_sd = sd(train$Flight.Distance),
+  logDepDelay_mean = mean(logDepDelay), logDepDelay_sd = sd(logDepDelay),
+  arr_delay_mean = mu_a, arr_delay_sd = sd_a
+)
+
+saveRDS(list(loo = loo_final, waic = waic_final, kappa_tbl = kappa_tbl,
+             beta_draws = beta_draws, standardization = standardization,
+             service_items = service_items),
+        "section03_loo.rds")
+```

@@ -320,3 +320,38 @@ call either one a confident driver on its own -- Section 03's shrinkage
 model, with the full battery of 14 service ratings added, will help
 clarify which of these borderline effects survive alongside the stronger
 correlated service signals.
+
+# Export for later sections
+
+Saved for reuse in Section 05 (WAIC/PSIS-LOO comparison and the
+prior-variance sweep): the compact `loo`/`waic` result objects. Also
+saved here for Section 06: a thinned set of posterior draws of `beta`,
+and -- critically -- the exact training-set mean/SD used to standardize
+every continuous covariate, so that test-set predictions apply the
+*identical* transform rather than leaking test-set statistics into
+preprocessing.
+
+```{r export-loo}
+final_loglik <- extract_loglik(final_fit)
+loo_final <- loo::loo(final_loglik)
+waic_final <- loo::waic(final_loglik)
+
+# Thin to at most 1000 draws for compactness; plenty for posterior-mean
+# predictions and calibration in Section 06.
+sm_final <- as.matrix(final_fit)
+keep_idx <- round(seq(1, nrow(sm_final), length.out = min(1000, nrow(sm_final))))
+beta_draws <- sm_final[keep_idx, beta_cols]
+
+standardization <- list(
+  Age_mean = mean(train$Age), Age_sd = sd(train$Age),
+  Seat_mean = mean(train$Seat.comfort), Seat_sd = sd(train$Seat.comfort),
+  FlightDist_mean = mean(train$Flight.Distance), FlightDist_sd = sd(train$Flight.Distance),
+  logDepDelay_mean = mean(logDepDelay), logDepDelay_sd = sd(logDepDelay),
+  arr_delay_mean = mu_a, arr_delay_sd = sd_a
+)
+
+saveRDS(list(loo = loo_final, waic = waic_final,
+             beta_mean = post_mean, beta_ci = post_ci, or_tbl = or_tbl,
+             beta_draws = beta_draws, standardization = standardization),
+        "section02_loo.rds")
+```
