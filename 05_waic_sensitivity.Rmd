@@ -113,6 +113,13 @@ print(waic_hs)
 
 comparison <- loo::loo_compare(list(flat = loo_flat, horseshoe = loo_hs))
 print(comparison)
+
+# In loo >= 2.10 the model names moved from the rownames into a `model`
+# column, so comparison["flat", ] just gives NA. Match on the column instead.
+cmp_row <- function(cmp, model_name, col) {
+  if ("model" %in% colnames(cmp)) cmp[cmp$model == model_name, col]
+  else cmp[model_name, col]   # older loo
+}
 ```
 
 The horseshoe model fits the training data decisively better once complexity
@@ -121,9 +128,53 @@ is penalized: WAIC is `r round(waic_flat$estimates["waic","Estimate"],1)`
 `r round(waic_hs$estimates["waic","Estimate"],1)`
 (SE `r round(waic_hs$estimates["waic","SE"],1)`) for the horseshoe, and
 `loo_compare` puts the flat model
-`r round(abs(comparison["flat","elpd_diff"]),1)` ELPD points behind the
-horseshoe (SE `r round(comparison["flat","se_diff"],1)`) — an order of
-magnitude beyond noise.
+`r round(abs(cmp_row(comparison, "flat", "elpd_diff")),1)` ELPD points behind
+the horseshoe (SE `r round(cmp_row(comparison, "flat", "se_diff"),1)`), an
+order of magnitude beyond noise.
+
+## DIC
+
+The change-point lecture notebook introduces DIC next to WAIC, so we report
+it as well. DIC compares the likelihood at a representative posterior
+estimate against the average likelihood over the posterior,
+
+$$\mathrm{DIC} \;=\; \overline{D(\theta)} \;+\; p_D,
+\qquad
+p_D \;=\; \overline{D(\theta)} - D(\bar\theta),
+\qquad
+D(\theta) = -2\log f(y \mid \theta),$$
+
+with $p_D$ the effective number of parameters. Smaller is better. Unlike
+WAIC it uses a point estimate rather than the full pointwise predictive
+density, which is why the two can disagree slightly.
+
+`dic.samples()` needs the compiled JAGS model rather than the saved draws.
+The flat model is still in memory here; the horseshoe's DIC was computed in
+Section 3, where its model object exists, and saved to disk.
+
+```{r dic}
+dic_flat <- dic.samples(jm_flat, n.iter = 2000, type = "pD")
+dic_hs   <- readRDS("data/dic_hs.rds")
+
+print(dic_flat)
+print(dic_hs)
+
+# sum() of a "dic" object gives penalized deviance = mean deviance + pD
+dic_total <- function(d) sum(d$deviance) + sum(d$penalty)
+
+data.frame(
+  Model    = c("flat (9 predictors)", "horseshoe (22 predictors)"),
+  Deviance = round(c(sum(dic_flat$deviance), sum(dic_hs$deviance)), 1),
+  pD       = round(c(sum(dic_flat$penalty),  sum(dic_hs$penalty)),  1),
+  DIC      = round(c(dic_total(dic_flat),    dic_total(dic_hs)),    1)
+)
+```
+
+**TODO for the report:** check whether DIC agrees with WAIC on the ranking.
+If it does, say so, it strengthens the conclusion. If it does not, that is
+worth a sentence: DIC penalizes with a single point estimate while WAIC uses
+the whole posterior, and the horseshoe's effective parameter count is exactly
+the sort of thing the two treat differently.
 
 This is **not**, however, a clean test of "horseshoe prior vs. flat prior"
 holding everything else equal. The flat model does not just have a different

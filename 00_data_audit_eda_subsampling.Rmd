@@ -135,6 +135,12 @@ plot_corr_heatmap <- function(mat, labels = colnames(mat), title = "Correlation 
 
 corr_mat <- cor(data[ordinal_vars])
 plot_corr_heatmap(corr_mat, title = "Correlation between the 14 service-quality items")
+
+# save a copy for the report
+dir.create("figs", showWarnings = FALSE)
+png("figs/correlation_heatmap.png", width = 8, height = 6, units = "in", res = 150)
+plot_corr_heatmap(corr_mat, title = "Correlation between the 14 service-quality items")
+invisible(dev.off())
 ```
 
 Two clear blocks stand out, plus a third, weaker one:

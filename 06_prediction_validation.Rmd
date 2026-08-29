@@ -34,6 +34,8 @@ set.seed(2026)
 library(rjags)
 library(coda)
 library(BAS)
+library(ggplot2)   # calibration plot
+library(pROC)      # ROC / AUC
 ```
 
 ## Load train and test, align factor levels
@@ -264,3 +266,119 @@ figure — worth a glance for whether errors lean toward false positives or
 false negatives for any one model, even without computing precision/recall
 formally, since the outcome here is close to balanced and a lopsided error
 pattern would be the more interesting thing to flag qualitatively.
+
+## ROC and AUC
+
+Accuracy only tells us how often the model lands on the right side of the
+0.5 cutoff, which is an arbitrary choice. It ignores how confident the model
+was.
+
+The ROC curve tries every possible cutoff instead, and AUC is the area under
+it. AUC measures how well the model *ranks* customers, with no threshold
+involved: 0.5 is random, 1 is perfect.
+
+```{r roc-auc, fig.width = 6.5, fig.height = 6.5}
+library(pROC)
+
+roc_flat <- roc(y_test, p_flat_test, quiet = TRUE)
+roc_hs   <- roc(y_test, p_hs_test,   quiet = TRUE)
+roc_bas  <- roc(y_test, p_bas_test,  quiet = TRUE)
+
+draw_roc <- function() {
+  plot(roc_flat, col = "steelblue", lwd = 2,
+       main = "ROC curves on the held-out test set")
+  lines(roc_hs,  col = "firebrick", lwd = 2)
+  lines(roc_bas, col = "darkgreen", lwd = 2, lty = 2)
+  legend("bottomright", bty = "n", lwd = 2,
+         col = c("steelblue", "firebrick", "darkgreen"),
+         lty = c(1, 1, 2),
+         legend = c(sprintf("Flat (AUC %.3f)",      auc(roc_flat)),
+                    sprintf("Horseshoe (AUC %.3f)", auc(roc_hs)),
+                    sprintf("BAS (AUC %.3f)",       auc(roc_bas))))
+}
+
+draw_roc()
+
+# also save for the report
+dir.create("figs", showWarnings = FALSE)
+png("figs/roc_curves.png", width = 6.5, height = 6.5, units = "in", res = 150)
+draw_roc()
+invisible(dev.off())
+
+summary_df$AUC <- c(as.numeric(auc(roc_flat)),
+                    as.numeric(auc(roc_hs)),
+                    as.numeric(auc(roc_bas)))
+print(summary_df)
+```
+
+AUC and accuracy can disagree. A model can rank customers well but still get
+many of them wrong at 0.5, if all its probabilities are shifted up or down.
+The next section checks for exactly that.
+
+## Calibration
+
+Accuracy and AUC both only look at the *order* of the predictions. But we
+want the probability itself to mean something: out of the customers the
+model says are 70% likely to be satisfied, about 70% should actually be
+satisfied. A model can rank well and still be badly calibrated, which for a
+Bayesian model is a real problem, not a detail.
+
+To check it we split the test customers into deciles by predicted
+probability, and in each bin compare the average prediction against what
+actually happened. If the model is calibrated the points sit on the
+diagonal.
+
+```{r calibration, fig.width = 7, fig.height = 5.5}
+calibration_bins <- function(p_hat, y_true, label, n_bins = 10) {
+  # Bin on quantiles rather than fixed-width, so each bin holds a comparable
+  # number of customers even where predicted probabilities pile up.
+  brks <- unique(quantile(p_hat, probs = seq(0, 1, length.out = n_bins + 1)))
+  bin  <- cut(p_hat, breaks = brks, include.lowest = TRUE, labels = FALSE)
+  agg  <- aggregate(cbind(predicted = p_hat, observed = y_true),
+                    by = list(bin = bin), FUN = mean)
+  agg$n     <- as.numeric(table(bin))
+  agg$Model <- label
+  agg
+}
+
+calib <- rbind(
+  calibration_bins(p_flat_test, y_test, "Flat (9 predictors)"),
+  calibration_bins(p_hs_test,   y_test, "Horseshoe (22 predictors)"),
+  calibration_bins(p_bas_test,  y_test, "BAS bas.glm")
+)
+
+p_calib <- ggplot(calib, aes(x = predicted, y = observed, colour = Model)) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", colour = "grey40") +
+  geom_line() +
+  geom_point(aes(size = n), alpha = 0.8) +
+  scale_colour_manual(values = c("Flat (9 predictors)"       = "steelblue",
+                                  "Horseshoe (22 predictors)" = "firebrick",
+                                  "BAS bas.glm"               = "darkgreen")) +
+  coord_equal(xlim = c(0, 1), ylim = c(0, 1)) +
+  labs(title = "Calibration on the held-out test set",
+       subtitle = "Deciles of predicted probability; points on the diagonal are perfectly calibrated",
+       x = "Mean predicted probability (within bin)",
+       y = "Observed satisfaction rate (within bin)",
+       size = "customers in bin") +
+  theme_minimal()
+
+ggsave("figs/calibration.png", p_calib, width = 7, height = 5.5, dpi = 150)
+p_calib
+```
+
+The same thing as a single number: the average gap between predicted and
+observed rate across the bins, weighted by bin size. This is usually called
+the expected calibration error (ECE). Lower is better, 0 is perfect.
+
+```{r calibration-error}
+ece <- sapply(split(calib, calib$Model), function(d)
+  sum(d$n * abs(d$predicted - d$observed)) / sum(d$n))
+
+round(data.frame(ECE = sort(ece)), 4)
+```
+
+Two things worth checking here. If a model's curve sits consistently below
+the diagonal it is overstating satisfaction, and above means it understates
+it. And it is worth seeing whether the model that wins on accuracy also wins
+on calibration, since they measure different things: ranking customers needs
+good AUC, but saying "this customer has a 72% chance" needs good calibration.

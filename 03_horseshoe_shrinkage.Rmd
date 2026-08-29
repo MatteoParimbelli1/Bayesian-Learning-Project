@@ -132,6 +132,14 @@ samples_hs <- coda.samples(jm_hs,
                             n.iter = n.iter, thin = thin)
 
 saveRDS(samples_hs, "data/samples_hs.rds")  # so Section 4/5 can reuse it without refitting
+
+# DIC, the criterion used in the change-point lecture notebook alongside WAIC.
+# dic.samples() needs the compiled model object, not just the draws, so it has
+# to be computed here rather than in Section 5 from the saved .rds. Saved
+# separately so Section 5 can compare it against the flat model's DIC.
+dic_hs <- dic.samples(jm_hs, n.iter = 2000, type = "pD")
+print(dic_hs)
+saveRDS(dic_hs, "data/dic_hs.rds")
 ```
 
 ## Convergence diagnostic
@@ -148,8 +156,19 @@ effectiveSize(samples_hs[, c("beta0", beta_cols_hs)])
 effectiveSize(samples_hs[, grep("^lambda\\[", varnames(samples_hs))])
 
 # One representative trace plot per "regime": a shrunk coefficient vs a surviving one
-plot(samples_hs[, "beta[1]"])  
-plot(samples_hs[, "beta[9]"])   
+plot(samples_hs[, "beta[1]"])
+plot(samples_hs[, "beta[9]"])
+
+# Save trace + density plots for the report appendix. beta[9] is the least
+# shrunk coefficient (customer type), beta[1] one of the more shrunk ones,
+# and tau is the global scale, which mixes the slowest of the three.
+dir.create("figs", showWarnings = FALSE)
+png("figs/trace_horseshoe.png", width = 8, height = 8, units = "in", res = 150)
+par(mfrow = c(3, 2))
+plot(samples_hs[, "beta[9]"], auto.layout = FALSE)
+plot(samples_hs[, "beta[1]"], auto.layout = FALSE)
+plot(samples_hs[, "tau"],     auto.layout = FALSE)
+invisible(dev.off())
 ```
 
 All four chains agree closely: R-hat is 1.00 everywhere (1.01 at most, even
