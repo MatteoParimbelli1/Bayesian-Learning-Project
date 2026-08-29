@@ -1,0 +1,276 @@
+---
+title: "00 - Data Audit, EDA, and the Subsampling Decision"
+subtitle: "Airline Customer Satisfaction -- Bayesian Learning & Monte Carlo Simulations, 2026"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE,
+                       fig.align = "center", cache = FALSE)
+
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(corrplot)
+library(caret)
+library(RColorBrewer)
+```
+
+# Data audit, EDA, and the subsampling decision
+
+## Loading the data and basic recoding
+
+We work with the full ~130k-row source file rather than the curated 1,000-row
+`airline_sub.csv` described in the brief (see the sampling decision below for
+how we reconcile the two).
+
+```{r load-data}
+raw <- read.csv("Airline_customer_satisfaction.csv", stringsAsFactors = FALSE)
+
+df <- raw %>%
+  mutate(
+    satisfaction   = factor(satisfaction, levels = c("dissatisfied", "satisfied")),
+    Class          = factor(Class, levels = c("Eco", "Eco Plus", "Business"), ordered = TRUE),
+    Customer.Type  = factor(Customer.Type),
+    Type.of.Travel = factor(Type.of.Travel)
+  )
+
+n_total   <- nrow(df)
+sat_rate  <- mean(df$satisfaction == "satisfied")
+```
+
+The dataset contains `r format(n_total, big.mark = ",")` customers. The overall
+satisfaction rate is `r sprintf("%.1f%%", 100 * sat_rate)`, balanced enough for
+a straightforward Bernoulli / logistic treatment later on. `Class` has 3 levels
+(Eco, Eco Plus, Business); `Customer.Type` and `Type.of.Travel` are binary.
+
+## Correlation structure of the 14 service-quality items
+
+The Likert-style service ratings (0-5) are not independent. We check this
+with a correlation heatmap, ordered by hierarchical clustering so that
+correlated blocks are visually adjacent.
+
+```{r service-items}
+service_items <- c("Seat.comfort", "Departure.Arrival.time.convenient", "Food.and.drink",
+                    "Gate.location", "Inflight.wifi.service", "Inflight.entertainment",
+                    "Online.support", "Ease.of.Online.booking", "On.board.service",
+                    "Leg.room.service", "Baggage.handling", "Checkin.service",
+                    "Cleanliness", "Online.boarding")
+
+cor_services <- cor(df[, service_items], use = "pairwise.complete.obs")
+```
+
+```{r corr-heatmap, fig.width=8.5, fig.height=7.5}
+corrplot(cor_services, method = "color", type = "upper", order = "hclust",
+         col = colorRampPalette(rev(brewer.pal(9, "RdBu")))(200),
+         tl.col = "black", tl.srt = 45, tl.cex = 0.75,
+         addCoef.col = "black", number.cex = 0.55,
+         diag = FALSE,
+         title = "Correlation matrix of the 14 service-quality items\n(hierarchical clustering order)",
+         mar = c(0, 0, 2, 0))
+```
+
+```{r cluster-ranges}
+cluster_range <- function(items) {
+  sub <- cor_services[items, items]
+  vals <- sub[upper.tri(sub)]
+  sprintf("%.2f-%.2f", min(vals), max(vals))
+}
+
+cluster_booking  <- c("Inflight.wifi.service", "Online.support",
+                       "Ease.of.Online.booking", "Online.boarding")
+cluster_onboard  <- c("On.board.service", "Leg.room.service",
+                       "Baggage.handling", "Cleanliness")
+cluster_catering <- c("Seat.comfort", "Food.and.drink",
+                       "Departure.Arrival.time.convenient", "Gate.location")
+
+r_booking  <- cluster_range(cluster_booking)
+r_onboard  <- cluster_range(cluster_onboard)
+r_catering <- cluster_range(cluster_catering)
+```
+
+Three blocks emerge clearly:
+
+- **Booking / connectivity**: `Inflight wifi service`, `Online support`,
+  `Ease of Online booking`, `Online boarding` move together
+  (pairwise correlations `r r_booking`).
+- **On-board comfort**: `On-board service`, `Leg room service`,
+  `Baggage handling`, `Cleanliness` form a second cluster
+  (`r r_onboard`).
+- **Seat / catering / ground experience**: `Seat comfort`, `Food and drink`,
+  `Departure/Arrival time convenient`, `Gate location` form a third,
+  slightly tighter cluster (`r r_catering`) -- this one was not obvious from
+  a first pass and only shows up once the full correlation matrix is
+  inspected; it is also, as the next section shows, exactly the cluster that
+  carries most of the structural-zero ambiguity.
+
+This is the empirical basis for using a shrinkage prior (Section 3) rather
+than treating all 14 items as freely and independently informative.
+
+## Structural zeros in the service ratings
+
+Several items show a suspiciously large share of exact `0` ratings, which
+plausibly encode "not applicable" (e.g. no on-board wifi on some flights)
+rather than a genuine bottom-of-scale rating.
+
+```{r structural-zeros}
+zero_share <- sort(sapply(df[, service_items], function(x) mean(x == 0)),
+                    decreasing = TRUE)
+
+knitr::kable(
+  data.frame(item = names(zero_share), zero_share = round(zero_share, 3)),
+  row.names = FALSE, col.names = c("Service item", "Share of rows = 0"),
+  caption = "Share of rows recording a 0 rating, by service item"
+)
+```
+
+We flag, but do not model, the items with a non-trivial zero share (above
+2%) as a single per-row indicator, to be used later only as a robustness
+check (Section 5: does dropping these rows change the conclusions?).
+
+```{r flag-structural-zero}
+zero_candidates <- names(zero_share)[zero_share > 0.02]
+
+df <- df %>%
+  mutate(structural_zero_flag = if_any(all_of(zero_candidates), ~ .x == 0))
+
+n_flagged <- sum(df$structural_zero_flag)
+```
+
+`r length(zero_candidates)` items are flagged (`r paste(zero_candidates, collapse = ", ")`),
+affecting `r format(n_flagged, big.mark = ",")` rows
+(`r sprintf("%.1f%%", 100 * mean(df$structural_zero_flag))` of the data). This
+matches the earlier finding that these are exactly the items in the
+"seat / catering / ground experience" cluster above -- consistent with a
+shared "not applicable on this flight" mechanism rather than four unrelated
+data-quality issues.
+
+## Decorrelating Departure and Arrival delay
+
+```{r delay-collinearity}
+delay_cor <- cor(df$Departure.Delay.in.Minutes, df$Arrival.Delay.in.Minutes,
+                  use = "complete.obs")
+n_missing_arr <- sum(is.na(df$Arrival.Delay.in.Minutes))
+```
+
+`Departure Delay` and `Arrival Delay` correlate at
+`r sprintf("%.3f", delay_cor)`: using both raw would be close to duplicating
+one variable. `Arrival Delay` also has `r n_missing_arr` missing values
+(`r sprintf("%.2f%%", 100 * n_missing_arr / n_total)`).
+
+Rather than a simple difference, we regress `Arrival Delay` on
+`Departure Delay` and keep the **residual** as a second covariate -- by
+construction uncorrelated with `Departure Delay`, and interpretable as
+"minutes gained or lost in the air relative to what the departure delay
+alone would predict":
+
+```{r delay-residual}
+delay_fit <- lm(Arrival.Delay.in.Minutes ~ Departure.Delay.in.Minutes, data = df)
+
+df$ArrivalDelay.Residual <- NA_real_
+df$ArrivalDelay.Residual[!is.na(df$Arrival.Delay.in.Minutes)] <- residuals(delay_fit)
+
+check_cor <- cor(df$Departure.Delay.in.Minutes, df$ArrivalDelay.Residual,
+                  use = "complete.obs")
+```
+
+The fitted relationship is
+Arrival $\approx$ `r sprintf("%.2f", coef(delay_fit)[1])` $+$
+`r sprintf("%.3f", coef(delay_fit)[2])` $\times$ Departure
+(R$^2$ = `r sprintf("%.3f", summary(delay_fit)$r.squared)`), and the
+residual is essentially uncorrelated with Departure Delay by construction
+(r = `r formatC(check_cor, format = "e", digits = 2)`). The `r n_missing_arr`
+missing arrival delays propagate to missing residuals here; we do not drop
+or impute them in this section -- Section 2 treats them properly as
+stochastic nodes inside the JAGS model rather than discarding rows.
+
+## Stratified subsample: matching the brief's intended scale
+
+The brief describes a curated 1,000-row file; we have the full
+`r format(n_total, big.mark = ",")`-row source. We draw a stratified
+training subsample of $n \approx 1{,}200$ (stratified jointly on
+`satisfaction` and `Class`, matching the brief's intended scale while
+keeping MCMC fast in later sections) and keep essentially all remaining
+rows as a held-out test set for prediction (Section 6).
+
+```{r stratified-sample}
+set.seed(123)
+
+strata <- interaction(df$satisfaction, df$Class, drop = TRUE)
+train_idx <- createDataPartition(y = strata, p = 1200 / n_total, list = FALSE)
+
+train_df <- df[train_idx, ]
+test_df  <- df[-train_idx, ]
+```
+
+Training subsample: `r nrow(train_df)` rows. Held-out test set:
+`r format(nrow(test_df), big.mark = ",")` rows.
+
+```{r stratification-check}
+compare_tbl <- function(var) {
+  full  <- prop.table(table(df[[var]]))
+  train <- prop.table(table(train_df[[var]]))
+  round(cbind(full = full, train = train), 3)
+}
+
+cat("Satisfaction proportions (full data vs. training subsample):\n")
+print(compare_tbl("satisfaction"))
+
+cat("\nClass proportions (full data vs. training subsample):\n")
+print(compare_tbl("Class"))
+
+cat("\nCustomer Type proportions (full data vs. training subsample):\n")
+print(compare_tbl("Customer.Type"))
+```
+
+The stratified draw preserves the population proportions closely on all
+three grouping variables, so subsequent sections can treat `train_df` as a
+faithful, fast-to-fit stand-in for the full population for model
+development, with `test_df` reserved untouched for genuine out-of-sample
+evaluation.
+
+## Service ratings by satisfaction
+
+```{r boxplots-by-satisfaction, fig.width=9, fig.height=7}
+df %>%
+  select(satisfaction, all_of(service_items)) %>%
+  pivot_longer(-satisfaction, names_to = "item", values_to = "rating") %>%
+  ggplot(aes(x = satisfaction, y = rating, fill = satisfaction)) +
+  geom_boxplot(outlier.size = 0.4, alpha = 0.85) +
+  facet_wrap(~ item, ncol = 4, scales = "free_y") +
+  scale_fill_manual(values = c("dissatisfied" = "#D85A30", "satisfied" = "#3B6D11")) +
+  labs(title = "Service-quality ratings by satisfaction outcome",
+       x = NULL, y = "Rating (0-5)") +
+  theme_minimal(base_size = 9) +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 0),
+        strip.text = element_text(face = "bold", size = 7.5))
+```
+
+Satisfied customers rate essentially every service item higher, most
+visibly for `Online boarding`, `Inflight entertainment` and
+`Ease of Online booking` -- consistent with the booking/connectivity
+cluster identified above being a strong candidate driver, to be confirmed
+formally in the modelling sections.
+
+## Saving the derived datasets for the rest of the analysis
+
+```{r save-outputs}
+saveRDS(df, "airline_full_clean.rds")
+write.csv(train_df, "airline_train_n1200.csv", row.names = FALSE)
+write.csv(test_df,  "airline_test_holdout.csv", row.names = FALSE)
+```
+
+`airline_full_clean.rds` (full data, recoded factors, `ArrivalDelay.Residual`
+and `structural_zero_flag` added), `airline_train_n1200.csv` and
+`airline_test_holdout.csv` are written next to this file and are the inputs
+for every section from here on -- no section past this point should
+re-derive these variables from the raw file. **Keep this Rmd and all the
+`.csv`/`.rds` files in the same folder** (no subfolders) so the relative
+paths resolve. Section 1 onward each live in their own numbered `.Rmd` file
+in this same folder and read these outputs back in rather than
+re-deriving them.

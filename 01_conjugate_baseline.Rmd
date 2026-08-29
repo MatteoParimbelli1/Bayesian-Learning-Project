@@ -1,232 +1,240 @@
 ---
-title: "1. Conjugate baseline: how satisfied are customers, before any covariates?"
-subtitle: "Airline Customer Satisfaction -- Bayesian Learning project"
+title: "01 - Conjugate Baseline: How Satisfied Are Customers, Before Any Covariates?"
+subtitle: "Airline Customer Satisfaction -- Bayesian Learning & Monte Carlo Simulations, 2026"
 output:
   html_document:
-    df_print: paged
-    mathjax: "default"
+    toc: true
+    toc_float: true
+    number_sections: true
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE,
+                       fig.align = "center", cache = FALSE)
+
+library(dplyr)
+library(tidyr)
+library(ggplot2)
 ```
 
-## 0. Data
-
-Builds directly on `00_data_audit_eda_subsampling.Rmd`: we read
-`data/train_subsample.csv`, the same stratified n ~= 1200 training split
-that every later section (JAGS, BAS, prediction) reuses unchanged.
+This is the "Bayesian 101" opening beat: one exact, auditable number and its
+uncertainty, with no black-box sampler yet. It uses the $n \approx 1{,}200$
+stratified training subsample produced in `00_data_audit_and_eda.Rmd` --
+closed-form throughout, since the Beta-Binomial model is conjugate.
 
 ```{r load-data}
-train <- read.csv("data/train_subsample.csv", stringsAsFactors = FALSE)
-train$cabin_class <- factor(train$cabin_class, levels = c("Eco", "Eco Plus", "Business"))
+train <- read.csv("airline_train_n1200.csv", stringsAsFactors = FALSE)
+train$y <- as.integer(train$satisfaction == "satisfied")
 
-n <- nrow(train)
-x <- sum(train$satisfaction == "satisfied")
-
-cat("n =", n, " | satisfied =", x, " | raw proportion =", round(x / n, 4), "\n")
+n_train <- nrow(train)
 ```
 
-## 1. Model
+# Model
 
-Each customer $i$ is treated as an independent trial,
-$X_i \mid p \sim \text{Bernoulli}(p)$, where $p$ is the (unknown) true
-satisfaction rate in the customer population. Aggregating over the $n$
-customers, the total number satisfied, $X = \sum_i X_i$, follows
+$$
+X \mid p \sim \text{Binomial}(n, p), \qquad p \sim \text{Beta}(\alpha_0, \beta_0),
+$$
 
-$$X \mid p \sim \text{Binomial}(n, p), \qquad p \sim \mathscr{B}e(\alpha_0, \beta_0)$$
+so that, by conjugacy,
 
-Since the Beta distribution is conjugate to the Binomial likelihood, the
-posterior is available in closed form -- no sampler needed:
+$$
+p \mid X \sim \text{Beta}(\alpha_0 + X,\ \beta_0 + n - X).
+$$
 
-$$p \mid X \sim \mathscr{B}e(\alpha_0 + X,\ \beta_0 + n - X)$$
+We use $\text{Beta}(1,1)$ (uniform) as the default prior and revisit this
+choice formally in the prior-sensitivity check below.
 
-```{r helper-functions}
-mean.beta <- function(a, b) a / (a + b)
+# Overall satisfaction rate
 
-var.beta <- function(a, b) (a * b) / ((a + b)^2 * (a + b + 1))
+```{r overall-posterior}
+a0 <- 1; b0 <- 1
+X <- sum(train$y)
+a_post <- a0 + X
+b_post <- b0 + n_train - X
 
-mode.beta <- function(a, b) {
-  ifelse(a > 1 & b > 1, (a - 1) / (a + b - 2),
-    ifelse(a <= 1 & b > 1, 0,
-      ifelse(a > 1 & b <= 1, 1, NA)))
-}
-
-ci.beta <- function(a, b, level = 0.95) {
-  qbeta(c((1 - level) / 2, 1 - (1 - level) / 2), a, b)
-}
+post_mean <- a_post / (a_post + b_post)
+post_ci   <- qbeta(c(0.025, 0.975), a_post, b_post)
 ```
 
-## 2. Overall estimate and prior sensitivity
+With `r n_train` customers in the training subsample and `r X` reporting
+satisfaction, the posterior is
+Beta(`r a_post`, `r b_post`), with posterior mean
+`r sprintf("%.3f", post_mean)` and 95% credible interval
+[`r sprintf("%.3f", post_ci[1])`, `r sprintf("%.3f", post_ci[2])`].
 
-Three candidate priors, chosen so the check is analytically transparent:
-a flat $\mathscr{B}e(1,1)$, the Jeffreys $\mathscr{B}e(0.5,0.5)$, and a
-mildly regularizing $\mathscr{B}e(2,2)$.
+```{r overall-plot, fig.width=6, fig.height=4}
+p_grid <- seq(0, 1, length.out = 1000)
+plot_df <- data.frame(
+  p = p_grid,
+  prior     = dbeta(p_grid, a0, b0),
+  posterior = dbeta(p_grid, a_post, b_post)
+) %>% pivot_longer(-p, names_to = "distribution", values_to = "density")
 
-```{r prior-sensitivity-table}
-priors <- list(
-  "Beta(1,1) uniform"      = c(1, 1),
-  "Beta(0.5,0.5) Jeffreys" = c(0.5, 0.5),
-  "Beta(2,2) skeptical"    = c(2, 2)
+ggplot(plot_df, aes(p, density, color = distribution)) +
+  geom_line(linewidth = 1) +
+  scale_color_manual(values = c(prior = "grey60", posterior = "#185FA5")) +
+  labs(title = "Overall satisfaction rate: prior vs. posterior",
+       x = expression(p), y = "Density", color = NULL) +
+  theme_minimal(base_size = 11)
+```
+
+# Subgroup posteriors
+
+Each subgroup posterior is its own exact Beta -- no extra machinery is
+needed, we simply condition on the rows in that subgroup.
+
+```{r subgroup-helper}
+subgroup_post <- function(data, var, a0 = 1, b0 = 1) {
+  data %>%
+    group_by(.data[[var]]) %>%
+    summarise(n = n(), X = sum(y),
+              a = a0 + X, b = b0 + n - X,
+              mean = a / (a + b),
+              lo95 = qbeta(0.025, a, b),
+              hi95 = qbeta(0.975, a, b),
+              .groups = "drop")
+}
+
+tbl_class    <- subgroup_post(train, "Class")
+tbl_custtype <- subgroup_post(train, "Customer.Type")
+tbl_travel   <- subgroup_post(train, "Type.of.Travel")
+```
+
+```{r subgroup-tables}
+knitr::kable(tbl_class, digits = 3, caption = "Posterior satisfaction rate by Class")
+knitr::kable(tbl_custtype, digits = 3, caption = "Posterior satisfaction rate by Customer Type")
+knitr::kable(tbl_travel, digits = 3, caption = "Posterior satisfaction rate by Type of Travel")
+```
+
+```{r subgroup-plot, fig.width=9, fig.height=3.4}
+make_density_df <- function(tbl, group_var) {
+  tbl %>%
+    rowwise() %>%
+    reframe(group = .data[[group_var]],
+            p = p_grid,
+            density = dbeta(p_grid, a, b))
+}
+
+d_class    <- make_density_df(tbl_class, "Class") %>% mutate(facet = "Class")
+d_custtype <- make_density_df(tbl_custtype, "Customer.Type") %>% mutate(facet = "Customer Type")
+d_travel   <- make_density_df(tbl_travel, "Type.of.Travel") %>% mutate(facet = "Type of Travel")
+
+bind_rows(d_class, d_custtype, d_travel) %>%
+  ggplot(aes(p, density, color = group)) +
+  geom_line(linewidth = 1) +
+  facet_wrap(~ facet, scales = "free_y") +
+  labs(title = "Subgroup posteriors for the satisfaction rate",
+       x = expression(p), y = "Density", color = NULL) +
+  theme_minimal(base_size = 10) +
+  theme(legend.position = "bottom")
+```
+
+Business-class, loyal, and business-travel customers all show visibly
+higher and non-overlapping posteriors than their counterparts -- exactly
+the headline contrasts we quantify next.
+
+# Monte Carlo subgroup contrasts
+
+For two independent Beta posteriors we do not need a closed-form
+comparison: we draw paired Monte Carlo samples from each and estimate
+$P(p_A > p_B \mid \text{data})$ as the empirical proportion of draws where
+one exceeds the other.
+
+```{r mc-contrast}
+set.seed(123)
+S <- 200000
+
+mc_contrast <- function(tbl, group_var, lvl1, lvl2, S = 200000) {
+  r1 <- tbl[tbl[[group_var]] == lvl1, ]
+  r2 <- tbl[tbl[[group_var]] == lvl2, ]
+  d1 <- rbeta(S, r1$a, r1$b)
+  d2 <- rbeta(S, r2$a, r2$b)
+  list(draws1 = d1, draws2 = d2, prob = mean(d1 > d2))
+}
+
+contrast_class  <- mc_contrast(tbl_class, "Class", "Business", "Eco")
+contrast_loyal  <- mc_contrast(tbl_custtype, "Customer.Type", "Loyal Customer", "disloyal Customer")
+contrast_travel <- mc_contrast(tbl_travel, "Type.of.Travel", "Business travel", "Personal Travel")
+
+contrast_summary <- data.frame(
+  contrast = c("P(Business > Eco)", "P(Loyal > disloyal)", "P(Business travel > Personal travel)"),
+  probability = c(contrast_class$prob, contrast_loyal$prob, contrast_travel$prob)
+)
+knitr::kable(contrast_summary, digits = 4)
+```
+
+```{r mc-diff-plot, fig.width=8, fig.height=3}
+diff_df <- bind_rows(
+  data.frame(diff = contrast_class$draws1 - contrast_class$draws2,  contrast = "Business - Eco"),
+  data.frame(diff = contrast_loyal$draws1 - contrast_loyal$draws2,  contrast = "Loyal - disloyal"),
+  data.frame(diff = contrast_travel$draws1 - contrast_travel$draws2, contrast = "Business travel - Personal travel")
 )
 
-sensitivity <- do.call(rbind, lapply(names(priors), function(nm) {
-  a0 <- priors[[nm]][1]; b0 <- priors[[nm]][2]
-  a1 <- a0 + x; b1 <- b0 + n - x
-  ci <- ci.beta(a1, b1)
-  data.frame(
-    prior     = nm,
-    a0        = a0,
-    b0        = b0,
-    post_mean = round(mean.beta(a1, b1), 4),
-    post_mode = round(mode.beta(a1, b1), 4),
-    post_var  = signif(var.beta(a1, b1), 4),
-    ci_2.5    = round(ci[1], 4),
-    ci_97.5   = round(ci[2], 4)
-  )
-}))
-
-sensitivity
+ggplot(diff_df, aes(diff)) +
+  geom_density(fill = "#3B6D11", alpha = 0.6) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "black") +
+  facet_wrap(~ contrast, scales = "free") +
+  labs(title = "Posterior distribution of the subgroup difference in satisfaction rate",
+       x = expression(p[A] - p[B]), y = "Density") +
+  theme_minimal(base_size = 9)
 ```
 
-```{r prior-sensitivity-plot, fig.width=10, fig.height=3.5}
-par(mfrow = c(1, 3), mar = c(4, 4, 3, 1))
+With essentially all posterior mass on the positive side for all three
+contrasts, the data supports each direction with near certainty at this
+sample size. This is still purely descriptive, though: the three grouping
+variables are themselves correlated (e.g. business travellers are
+disproportionately Business class), so we cannot yet say which of these
+associations survive once we condition on the others -- that is exactly
+the job of the regression in Section 02.
 
-for (nm in names(priors)) {
-  a0 <- priors[[nm]][1]; b0 <- priors[[nm]][2]
-  a1 <- a0 + x; b1 <- b0 + n - x
+# Prior sensitivity analysis
 
-  curve(dbeta(p, a0, b0), from = 0, to = 1, xname = "p",
-        col = "red", lwd = 2, ylim = c(0, 26),
-        xlab = "p (satisfaction rate)", ylab = "density", main = nm)
-  curve(dbeta(p, a1, b1), from = 0, to = 1, xname = "p",
-        add = TRUE, col = "blue", lwd = 2)
+We repeat the overall fit under three priors -- $\text{Beta}(1,1)$
+(uniform), $\text{Beta}(0.5,0.5)$ (Jeffreys), and a mildly skeptical
+$\text{Beta}(2,2)$ -- and also check the smallest subgroup we have
+(`Eco Plus`, $n=$ `r tbl_class$n[tbl_class$Class == "Eco Plus"]`), where
+prior sensitivity would show up first if it were going to show up at all.
 
-  if (nm == names(priors)[1]) {
-    legend("topleft", c("Prior", "Posterior"), col = c("red", "blue"),
-           lwd = 2, bty = "n", cex = 0.85)
-  }
+```{r prior-sensitivity}
+priors <- list(uniform = c(1, 1), jeffreys = c(0.5, 0.5), skeptical = c(2, 2))
+
+sensitivity_row <- function(a0, b0, X, n) {
+  a <- a0 + X; b <- b0 + n - X
+  c(mean = a / (a + b), lo95 = qbeta(0.025, a, b), hi95 = qbeta(0.975, a, b))
 }
+
+sens_overall <- t(sapply(priors, function(pr) sensitivity_row(pr[1], pr[2], X, n_train)))
+
+ecoplus <- train[train$Class == "Eco Plus", ]
+n_ep <- nrow(ecoplus); X_ep <- sum(ecoplus$y)
+sens_ecoplus <- t(sapply(priors, function(pr) sensitivity_row(pr[1], pr[2], X_ep, n_ep)))
+
+knitr::kable(round(sens_overall, 4), caption = "Prior sensitivity -- overall satisfaction rate")
+knitr::kable(round(sens_ecoplus, 4), caption = sprintf("Prior sensitivity -- Eco Plus subgroup (n=%d)", n_ep))
 ```
 
-All three posteriors agree to at least three decimal places -- with
-n ~= 1200, the data overwhelms any of these mild priors. This is the
-headline point of the sensitivity check: the specific prior chosen among
-these three does not materially affect the conclusion.
-
-## 3. Subgroup estimates
-
-The same closed-form update, refit independently within each level of
-cabin class, customer type, and travel type (each subgroup posterior is
-its own exact Beta -- this is *not* a hierarchical/pooled model). We use
-the uniform Beta(1,1) prior throughout, since Section 2 already showed
-the prior choice barely matters at these sample sizes.
-
-Note: only `satisfaction` and `cabin_class` were stratification variables
-in the Section 0 sampling design, so `customer_type` and `travel_type`
-subgroup sizes/splits reflect ordinary sampling variability rather than
-an exact match to their population shares.
-
-```{r subgroup-fits}
-fit_group <- function(data, group_var, levels_order = NULL, a0 = 1, b0 = 1) {
-  lv <- if (!is.null(levels_order)) levels_order else sort(unique(data[[group_var]]))
-  do.call(rbind, lapply(lv, function(g) {
-    sub <- data[data[[group_var]] == g, ]
-    n_g <- nrow(sub)
-    x_g <- sum(sub$satisfaction == "satisfied")
-    a1 <- a0 + x_g; b1 <- b0 + n_g - x_g
-    ci <- ci.beta(a1, b1)
-    data.frame(
-      group = g, n = n_g, x = x_g,
-      post_mean = round(mean.beta(a1, b1), 4),
-      ci_2.5    = round(ci[1], 4),
-      ci_97.5   = round(ci[2], 4)
-    )
-  }))
+```{r sensitivity-plot, fig.width=8, fig.height=3.2}
+sens_plot_df <- function(a0, b0, X, n, prior_name, group_name) {
+  data.frame(p = p_grid, density = dbeta(p_grid, a0 + X, b0 + n - X),
+             prior = prior_name, group = group_name)
 }
 
-cat("--- By cabin class ---\n")
-fit_group(train, "cabin_class", levels_order = c("Eco", "Eco Plus", "Business"))
-
-cat("--- By customer type ---\n")
-fit_group(train, "customer_type")
-
-cat("--- By travel type ---\n")
-fit_group(train, "travel_type")
-```
-
-```{r subgroup-plot, fig.width=10, fig.height=3.5}
-par(mfrow = c(1, 3), mar = c(4, 4, 3, 1))
-
-plot_group <- function(var, lv, cols, main) {
-  plot(NA, xlim = c(0, 1), ylim = c(0, 26),
-       xlab = "p (satisfaction rate)", ylab = "density", main = main)
-  for (i in seq_along(lv)) {
-    sub <- train[train[[var]] == lv[i], ]
-    n_g <- nrow(sub); x_g <- sum(sub$satisfaction == "satisfied")
-    curve(dbeta(p, 1 + x_g, 1 + n_g - x_g), from = 0, to = 1, xname = "p",
-          add = TRUE, col = cols[i], lwd = 2)
-  }
-  legend("topleft", legend = lv, col = cols, lwd = 2, bty = "n", cex = 0.75)
-}
-
-plot_group("cabin_class",  c("Eco", "Eco Plus", "Business"),
-           c("#378ADD", "#D85A30", "#1D9E75"), "By cabin class")
-plot_group("customer_type", c("Loyal Customer", "disloyal Customer"),
-           c("#1D9E75", "#D85A30"), "By customer type")
-plot_group("travel_type",   c("Business travel", "Personal Travel"),
-           c("#1D9E75", "#D85A30"), "By travel type")
-```
-
-## 4. Monte Carlo comparison between subgroups
-
-For each pair, draw a large number of samples from each subgroup's exact
-Beta posterior and estimate $P(p_A > p_B \mid \text{data})$ as the
-empirical proportion of paired draws where one exceeds the other. This
-needs no closed form and is the same Monte Carlo logic used throughout
-the rest of the course.
-
-```{r mc-comparison}
-set.seed(2026)
-M <- 2e5
-
-mc_compare <- function(data, group_var, g1, g2, a0 = 1, b0 = 1) {
-  s1 <- data[data[[group_var]] == g1, ]
-  s2 <- data[data[[group_var]] == g2, ]
-  n1 <- nrow(s1); x1 <- sum(s1$satisfaction == "satisfied")
-  n2 <- nrow(s2); x2 <- sum(s2$satisfaction == "satisfied")
-
-  p1 <- rbeta(M, a0 + x1, b0 + n1 - x1)
-  p2 <- rbeta(M, a0 + x2, b0 + n2 - x2)
-
-  mean(p1 > p2)
-}
-
-results <- data.frame(
-  comparison = c("P(Business > Eco)",
-                 "P(Loyal Customer > disloyal Customer)",
-                 "P(Business travel > Personal Travel)"),
-  probability = c(
-    mc_compare(train, "cabin_class", "Business", "Eco"),
-    mc_compare(train, "customer_type", "Loyal Customer", "disloyal Customer"),
-    mc_compare(train, "travel_type", "Business travel", "Personal Travel")
-  )
+sens_all <- bind_rows(
+  lapply(names(priors), function(nm) sens_plot_df(priors[[nm]][1], priors[[nm]][2], X, n_train, nm, "Overall")),
+  lapply(names(priors), function(nm) sens_plot_df(priors[[nm]][1], priors[[nm]][2], X_ep, n_ep, nm, "Eco Plus"))
 )
-results
+
+ggplot(sens_all, aes(p, density, color = prior)) +
+  geom_line(linewidth = 0.9) +
+  facet_wrap(~ group, scales = "free") +
+  labs(title = "Posterior under three priors: overall vs. smallest subgroup",
+       x = expression(p), y = "Density", color = "Prior") +
+  theme_minimal(base_size = 10)
 ```
 
-## 5. Summary
-
-- Overall satisfaction rate: posterior mean `r round(mean.beta(1+x,1+n-x),3)`,
-  95% credible interval essentially identical across all three priors tried.
-- Cabin class is the sharpest cut: Business customers are satisfied far more
-  often than Eco or Eco Plus, and the Monte Carlo comparison puts essentially
-  all posterior mass on Business exceeding Eco.
-- Customer type shows the largest gap of any subgroup split (loyal vs.
-  disloyal customers), again with no meaningful posterior overlap.
-- Travel type shows a real but more modest difference -- the Monte Carlo
-  probability is high but not effectively 1, because the two posteriors
-  overlap slightly (visible in the Section 3 plot).
-- No covariates, no regression, no sampler beyond the Monte Carlo
-  comparison step -- everything here is exact and auditable, which is the
-  point of this section relative to what follows.
+Even for `Eco Plus`, the smallest and thus most prior-exposed subgroup, the
+three posteriors are visually indistinguishable and the posterior means
+differ only in the third decimal place. At this sample size the likelihood
+already dominates any of these three reasonable priors -- a genuinely
+uninformative result, in the sense that it tells us the *data*, not our
+prior choice, is driving the conclusions.

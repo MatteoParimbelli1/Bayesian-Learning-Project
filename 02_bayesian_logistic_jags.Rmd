@@ -1,0 +1,322 @@
+---
+title: "02 - Core Bayesian Logistic Regression (JAGS, Vague Priors)"
+subtitle: "Airline Customer Satisfaction -- Bayesian Learning & Monte Carlo Simulations, 2026"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE,
+                       fig.align = "center", cache = FALSE)
+
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(rjags)
+library(coda)
+library(loo)
+```
+
+This is the model the audience can hold in their head: a handful of
+interpretable odds ratios. It is the interpretable fallback that every
+more elaborate model in later sections has to outperform to earn its
+place. We follow the Bernoulli-regression / Titanic-survival template
+from the JAGS notes (binary outcome, mix of categorical and continuous
+predictors) almost line for line.
+
+```{r load-data}
+train <- read.csv("airline_train_n1200.csv", stringsAsFactors = FALSE)
+train$y <- as.integer(train$satisfaction == "satisfied")
+n_train <- nrow(train)
+```
+
+# Covariate preparation
+
+Covariates: `Age`, `Seat comfort`, `Flight Distance`, `Class`, the two
+delay variables from Section 00 (`Departure Delay` and the
+decorrelated `ArrivalDelay.Residual`), `Type of Travel`, `Customer Type`.
+
+The original plan was to log-transform `Flight Distance` together with
+the delay variables. Before doing that blindly, we check the actual skew
+on the training subsample:
+
+```{r skew-check}
+skew <- function(x) { x <- x[!is.na(x)]; m <- mean(x); s <- sd(x); mean(((x - m) / s)^3) }
+
+signedLogArr <- sign(train$ArrivalDelay.Residual) * log1p(abs(train$ArrivalDelay.Residual))
+
+skew_tbl <- data.frame(
+  variable = c("Flight Distance", "log1p(Flight Distance)",
+               "Departure Delay", "log1p(Departure Delay)",
+               "Arrival Delay residual", "signed-log(Arrival Delay residual)"),
+  skewness = round(c(skew(train$Flight.Distance), skew(log1p(train$Flight.Distance)),
+                      skew(train$Departure.Delay.in.Minutes), skew(log1p(train$Departure.Delay.in.Minutes)),
+                      skew(train$ArrivalDelay.Residual), skew(signedLogArr)), 3)
+)
+knitr::kable(skew_tbl)
+```
+
+`Flight Distance` is only mildly skewed (0.36) and a log transform
+*overcorrects* it into a left skew (-1.70) -- so, contrary to the original
+plan, we keep it on the raw scale. The two delay variables are genuinely
+skewed (4.28 and 1.80) and both transforms clearly help: `log(1+x)` for
+`Departure Delay` (non-negative), and a **signed log**,
+$\text{sign}(x)\log(1+|x|)$, for the delay residual, which can be negative.
+This mirrors the standard trick for a skewed variable that isn't bounded
+below by zero.
+
+```{r covariate-prep}
+std <- function(x) as.numeric(scale(x))
+
+logDepDelay     <- log1p(train$Departure.Delay.in.Minutes)
+Age_std         <- std(train$Age)
+Seat_std        <- std(train$Seat.comfort)
+FlightDist_std  <- std(train$Flight.Distance)
+logDepDelay_std <- std(logDepDelay)
+
+# Arrival delay residual: standardize using the observed rows only, keep the
+# single NA -- it is handled inside the JAGS model below, not dropped here.
+obs  <- !is.na(signedLogArr)
+mu_a <- mean(signedLogArr[obs]); sd_a <- sd(signedLogArr[obs])
+arr_delay_std <- (signedLogArr - mu_a) / sd_a
+
+n_missing_arr <- sum(is.na(arr_delay_std))
+
+Class_EcoPlus   <- as.integer(train$Class == "Eco Plus")
+Class_Business  <- as.integer(train$Class == "Business")
+Class_score_std <- std(as.integer(factor(train$Class, levels = c("Eco", "Eco Plus", "Business"), ordered = TRUE)))
+
+TypeTravel_Personal <- as.integer(train$Type.of.Travel == "Personal Travel")
+CustType_disloyal   <- as.integer(train$Customer.Type == "disloyal Customer")
+
+X_dummy <- cbind(Age_std, Seat_std, FlightDist_std, Class_EcoPlus, Class_Business,
+                  logDepDelay_std, TypeTravel_Personal, CustType_disloyal)
+X_ordinal <- cbind(Age_std, Seat_std, FlightDist_std, Class_score_std,
+                    logDepDelay_std, TypeTravel_Personal, CustType_disloyal)
+```
+
+`Class` is fit two ways for comparison below: two dummies
+(`Eco Plus`, `Business`, reference = `Eco`) versus a single centred
+ordinal score (1/2/3). Reference levels for the binary covariates are
+the majority group in each case: `Business travel` and `Loyal Customer`.
+The delay residual has `r n_missing_arr` missing value(s) in this
+subsample; it is passed to JAGS as a partly-missing vector with its own
+sampling statement, so the single NA is imputed as a genuine posterior
+draw rather than silently dropped or mean-filled.
+
+# Model specification
+
+$$
+y_i \mid p_i \sim \text{Bernoulli}(p_i), \qquad
+\text{logit}(p_i) = \beta_0 + x_i\beta + \beta_{\text{arr}}\, \text{arr\_delay}_i,
+\qquad \beta_0, \beta_j, \beta_{\text{arr}} \sim \mathscr{N}(0, 100).
+$$
+
+The arrival-delay residual is kept outside the main design matrix and
+given its own coefficient together with an explicit sampling statement
+`arr_delay[i] ~ dnorm(0, 1)` for **every** row -- for observed rows this
+just re-states the (already standardized, so unit-variance) marginal
+distribution; for the one missing row, this is exactly what lets JAGS
+draw it as a latent parameter, informed by both this marginal
+distribution and its role in the logistic regression likelihood, rather
+than requiring the row to be dropped.
+
+```{r model-code}
+model_code <- function(link = "logit") {
+  link_line <- if (link == "logit") "logit(p[i]) <- lin[i]" else "probit(p[i]) <- lin[i]"
+  sprintf('model {
+  for (i in 1:n) {
+    y[i] ~ dbern(p[i])
+    %s
+    lin[i] <- beta0 + inprod(X[i,], beta) + beta_arr * arr_delay[i]
+    log_lik[i] <- logdensity.bern(y[i], p[i])
+    arr_delay[i] ~ dnorm(0, 1)
+  }
+  beta0 ~ dnorm(0, 0.01)
+  beta_arr ~ dnorm(0, 0.01)
+  for (j in 1:P) { beta[j] ~ dnorm(0, 0.01) }
+}', link_line)
+}
+```
+
+`log_lik[i] <- logdensity.bern(y[i], p[i])` is monitored throughout so
+that WAIC can be computed via the `loo` package for every model fit
+below, on a common footing.
+
+```{r fit-function}
+fit_model <- function(X, arr_delay, link = "logit",
+                       n.chains = 3, n.adapt = 500, burn = 1500, n.iter = 3000, thin = 2) {
+  dataList <- list(y = train$y, X = X, arr_delay = arr_delay, n = nrow(X), P = ncol(X))
+  m <- jags.model(textConnection(model_code(link)), data = dataList,
+                   n.chains = n.chains, n.adapt = n.adapt, quiet = TRUE)
+  update(m, burn)
+  coda.samples(m, variable.names = c("beta0", "beta", "beta_arr", "log_lik"),
+               n.iter = n.iter, thin = thin)
+}
+
+extract_loglik <- function(samples) {
+  sm <- as.matrix(samples)
+  sm[, grepl("^log_lik", colnames(sm))]
+}
+```
+
+# Choosing the `Class` encoding
+
+```{r fit-encoding, cache=TRUE}
+set.seed(123)
+fit_dummy_logit   <- fit_model(X_dummy,   arr_delay_std, "logit")
+fit_ordinal_logit <- fit_model(X_ordinal, arr_delay_std, "logit")
+
+w_dummy   <- waic(extract_loglik(fit_dummy_logit))
+w_ordinal <- waic(extract_loglik(fit_ordinal_logit))
+cmp_encoding <- loo_compare(list(dummy = w_dummy, ordinal = w_ordinal))
+```
+
+```{r encoding-waic-print}
+cat("Dummy encoding:\n");   print(w_dummy)
+cat("\nOrdinal encoding:\n"); print(w_ordinal)
+cat("\nComparison (positive elpd_diff favors the row):\n"); print(cmp_encoding)
+```
+
+The dummy encoding has the lower WAIC
+(`r sprintf("%.1f", w_dummy$estimates["waic","Estimate"])` vs
+`r sprintf("%.1f", w_ordinal$estimates["waic","Estimate"])`), though by
+less than 2 standard errors of the difference -- a real but modest
+preference, not an overwhelming one. Given `Class` is nominal rather than
+genuinely equally-spaced ordinal, and the dummy encoding is both the more
+flexible specification and the one that will let us report a separate,
+directly interpretable odds ratio per class, we adopt it going forward.
+
+# Choosing the link function
+
+```{r fit-link, cache=TRUE}
+set.seed(124)
+fit_dummy_probit <- fit_model(X_dummy, arr_delay_std, "probit")
+w_probit <- waic(extract_loglik(fit_dummy_probit))
+cmp_link <- loo_compare(list(logit = w_dummy, probit = w_probit))
+```
+
+```{r link-waic-print}
+cat("Probit link (dummy encoding):\n"); print(w_probit)
+cat("\nComparison:\n"); print(cmp_link)
+```
+
+Logit is (very slightly) preferred, as textbook theory would predict for
+this kind of data -- logit and probit links are nearly indistinguishable
+in fit and only differ in the tail behaviour of the link function. We
+carry the **logit link with dummy `Class` encoding** forward as the main
+model for the rest of the project (this is also the specification the
+horseshoe model in Section 03 builds on).
+
+# Diagnostics for the final model
+
+```{r diagnostics}
+final_fit <- fit_dummy_logit
+beta_cols <- colnames(as.matrix(final_fit))[!grepl("^log_lik", colnames(as.matrix(final_fit)))]
+
+gd  <- gelman.diag(final_fit[, beta_cols], multivariate = FALSE)
+ess <- effectiveSize(final_fit[, beta_cols])
+
+cat("Max Gelman-Rubin R-hat across beta parameters:", round(max(gd$psrf[, 1]), 4), "\n")
+cat("\nEffective sample sizes:\n"); print(round(ess))
+```
+
+```{r trace-plots, fig.width=8, fig.height=5}
+par(mfrow = c(2, 2))
+plot(as.mcmc.list(final_fit)[, "beta0"], trace = TRUE, density = FALSE, main = "beta0 (intercept)", auto.layout = FALSE)
+plot(as.mcmc.list(final_fit)[, "beta[5]"], trace = TRUE, density = FALSE, main = "beta[5] (Class: Business)", auto.layout = FALSE)
+acf(as.matrix(final_fit[[1]])[, "beta0"], main = "ACF: beta0, chain 1")
+acf(as.matrix(final_fit[[1]])[, "beta[5]"], main = "ACF: beta[5], chain 1")
+par(mfrow = c(1, 1))
+```
+
+Max R-hat is `r sprintf("%.3f", max(gd$psrf[, 1]))`, well below the usual
+1.05 threshold, and effective sample sizes range from
+`r round(min(ess))` (the intercept, as usual the slowest-mixing parameter
+since it isn't itself standardized like the continuous covariates) to
+`r round(max(ess))`. No further reparametrisation (e.g. centering the
+0/1 dummies) is needed at this sample size.
+
+# Posterior inference: odds ratios
+
+```{r odds-ratios}
+sm <- as.matrix(final_fit)
+sm_beta <- sm[, beta_cols]
+
+term_labels <- c(
+  "beta0" = "Intercept",
+  "beta[1]" = "Age",
+  "beta[2]" = "Seat comfort",
+  "beta[3]" = "Flight Distance",
+  "beta[4]" = "Class: Eco Plus (vs Eco)",
+  "beta[5]" = "Class: Business (vs Eco)",
+  "beta[6]" = "log(1+Departure Delay)",
+  "beta[7]" = "Personal Travel (vs Business travel)",
+  "beta[8]" = "disloyal Customer (vs Loyal)",
+  "beta_arr" = "Arrival delay residual (signed-log)"
+)
+
+post_mean <- colMeans(sm_beta)
+post_ci   <- apply(sm_beta, 2, quantile, c(0.025, 0.975))
+
+or_tbl <- data.frame(
+  term = term_labels[names(post_mean)],
+  beta_mean = round(post_mean, 3),
+  beta_lo = round(post_ci[1, ], 3), beta_hi = round(post_ci[2, ], 3),
+  OR = round(exp(post_mean), 3),
+  OR_lo = round(exp(post_ci[1, ]), 3), OR_hi = round(exp(post_ci[2, ]), 3)
+) %>% arrange(desc(OR))
+
+knitr::kable(or_tbl, row.names = FALSE)
+```
+
+```{r or-plot, fig.width=7, fig.height=4.5}
+or_tbl %>%
+  filter(term != "Intercept") %>%
+  mutate(term = factor(term, levels = term[order(OR)]),
+         significant = OR_lo > 1 | OR_hi < 1) %>%
+  ggplot(aes(x = OR, y = term, color = significant)) +
+  geom_vline(xintercept = 1, linetype = "dashed", color = "grey40") +
+  geom_errorbarh(aes(xmin = OR_lo, xmax = OR_hi), height = 0.2) +
+  geom_point(size = 2.5) +
+  scale_color_manual(values = c("TRUE" = "#185FA5", "FALSE" = "grey60"), guide = "none") +
+  scale_x_log10() +
+  labs(title = "Posterior odds ratios, logit model with dummy Class encoding",
+       subtitle = "95% credible intervals; dashed line = no effect",
+       x = "Odds ratio (log scale)", y = NULL) +
+  theme_minimal(base_size = 11)
+```
+
+# Interpretation
+
+`Business` class carries by far the largest effect
+(OR $\approx$ `r or_tbl$OR[or_tbl$term == "Class: Business (vs Eco)"]`,
+95% CI
+[`r or_tbl$OR_lo[or_tbl$term == "Class: Business (vs Eco)"]`,
+`r or_tbl$OR_hi[or_tbl$term == "Class: Business (vs Eco)"]`]),
+confirming the Section 01 subgroup contrast even after adjusting for
+everything else. `disloyal Customer` shows a strong *negative* effect
+(OR $\approx$ `r or_tbl$OR[or_tbl$term == "disloyal Customer (vs Loyal)"]`),
+also consistent with Section 01. `Seat comfort` is the strongest
+continuous driver.
+
+The interesting reversal is `Type of Travel`: Section 01 found an
+essentially certain marginal association (personal-travel customers
+looked less satisfied), but here, once `Class` and the other covariates
+are held fixed, its 95% credible interval for `Personal Travel`
+(`r or_tbl$OR_lo[or_tbl$term == "Personal Travel (vs Business travel)"]`
+to
+`r or_tbl$OR_hi[or_tbl$term == "Personal Travel (vs Business travel)"]`)
+comes close to, but does not quite exclude, 1. This is exactly the
+confounding flagged at the end of Section 01: business travellers are
+disproportionately booked in Business class, and once class is in the
+model directly, most of the apparent travel-type effect is explained
+away. `Flight Distance` and `Departure Delay` point in an intuitive
+direction but their credible intervals are wide enough that we would not
+call either one a confident driver on its own -- Section 03's shrinkage
+model, with the full battery of 14 service ratings added, will help
+clarify which of these borderline effects survive alongside the stronger
+correlated service signals.

@@ -1,305 +1,329 @@
 ---
-title: "Section 3 — Rich Model: JAGS with a Horseshoe Shrinkage Prior"
-output: html_document
+title: "03 - Rich Model: JAGS with a Horseshoe Shrinkage Prior"
+subtitle: "Airline Customer Satisfaction -- Bayesian Learning & Monte Carlo Simulations, 2026"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
-```
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE,
+                       fig.align = "center", cache = FALSE)
 
-
-
-## Motivation
-
-Section 2 modelled satisfaction using nine covariates, each with the same vague
-$N(0,100)$ prior. That works well when predictors are few and roughly
-independent. Here we extend the model to the full battery of 14 service
-ratings on top of the Section 2 covariates (22 predictors in total), several
-of which are strongly correlated with one another (Section 0 identified two
-clusters: wifi/online support/ease of booking/online boarding at
-$r \approx 0.56$–$0.68$, and onboard service/legroom/baggage/cleanliness at
-$r \approx 0.41$–$0.63$). Under a flat, equal prior, this collinearity spreads
-a cluster's real signal thinly across all of its members — no single
-coefficient stands out, standard errors inflate, and it becomes impossible to
-say which item actually drives satisfaction.
-
-A **horseshoe prior** solves this by letting
-the prior adapt coefficient-by-coefficient instead of treating every
-predictor identically: predictors that carry genuine signal are left
-essentially unconstrained, while redundant or noisy predictors are pulled
-sharply toward zero.
-
-```{r load-data}
-rm(list = ls())
-set.seed(2026)
-
+library(dplyr)
+library(tidyr)
+library(ggplot2)
 library(rjags)
 library(coda)
-library(dplyr)
-library(ggplot2)
-
-train <- read.csv("data/train_subsample.csv", stringsAsFactors = FALSE)
-train$satisfaction  <- factor(train$satisfaction, levels = c("dissatisfied", "satisfied"))
-train$customer_type <- factor(train$customer_type)
-train$travel_type   <- factor(train$travel_type)
-train$cabin_class   <- factor(train$cabin_class, levels = c("Eco", "Eco Plus", "Business"))
-
-# Same transforms as Section 2 
-train$flight_distance_z <- as.numeric(scale(log1p(train$flight_distance)))
-train$dep_delay_z       <- as.numeric(scale(log1p(train$dep_delay)))
-train$arr_delay_extra_z <- as.numeric(scale(train$arr_delay_extra))  # already a residual, no log
-train$age_z             <- as.numeric(scale(train$age))
-train$seat_comfort_z    <- as.numeric(scale(train$seat_comfort))
-
-# The 13 additional service ratings (seat_comfort is already in the block above)
-extra_service_items <- c("time_convenient", "food_drink", "gate_location", "wifi",
-                          "entertainment", "online_support", "ease_booking",
-                          "onboard_service", "legroom", "baggage", "checkin",
-                          "cleanliness", "online_boarding")
-for (v in extra_service_items) {
-  train[[paste0(v, "_z")]] <- as.numeric(scale(train[[v]]))
-}
-extra_service_z <- paste0(extra_service_items, "_z")
-
-rhs <- paste(c("age_z", "seat_comfort_z", "flight_distance_z", "cabin_class",
-               "dep_delay_z", "arr_delay_extra_z", "travel_type", "customer_type",
-               extra_service_z), collapse = " + ")
-
-X_hs  <- model.matrix(as.formula(paste("~", rhs)), data = train)[, -1]
-p_hs  <- ncol(X_hs)   # NOTE: named p_hs, not p -- JAGS uses p[i] for the probability itself
-y     <- as.numeric(train$satisfaction == "satisfied")
-n     <- nrow(train)
-
-p_hs                 
-colnames(X_hs)    
+library(loo)
 ```
 
+This is the "we didn't ignore the correlation problem, we solved it with
+the tool built for exactly this" section. We extend Section 02's model
+with the full battery of 14 service ratings, giving the three correlated
+clusters identified in Section 00 a chance to "compete" for signal under
+a horseshoe prior, rather than deciding by hand which single item from
+each cluster to keep.
 
-## Model specification
+```{r load-data}
+train <- read.csv("airline_train_n1200.csv", stringsAsFactors = FALSE)
+train$y <- as.integer(train$satisfaction == "satisfied")
+```
 
-Same Bernoulli-logit likelihood as Section 2:
+# Covariate set
 
-$$y_i \sim \text{Bernoulli}(p_i), \qquad \text{logit}(p_i) = \beta_0 + x_i'\beta$$
+All 14 service items plus the Section 02 covariates (minus `Seat comfort`,
+which is already one of the 14 -- it is not duplicated).
 
-Only the prior on the 22 slope coefficients changes:
+```{r covariate-prep}
+std <- function(x) as.numeric(scale(x))
 
-$$\beta_j \mid \lambda_j, \tau \sim \mathcal{N}(0, \lambda_j^2\tau^2), \qquad
-\lambda_j \sim \mathcal{C}^+(0,1), \qquad \tau \sim \mathcal{C}^+(0,1), \qquad j = 1,\dots,22$$
+service_items <- c("Seat.comfort", "Departure.Arrival.time.convenient", "Food.and.drink",
+                    "Gate.location", "Inflight.wifi.service", "Inflight.entertainment",
+                    "Online.support", "Ease.of.Online.booking", "On.board.service",
+                    "Leg.room.service", "Baggage.handling", "Checkin.service",
+                    "Cleanliness", "Online.boarding")
+X_service <- apply(train[, service_items], 2, std)
 
-with $\beta_0 \sim \mathcal{N}(0,100)$ as before. The global scale $\tau$
-controls overall sparsity; each local scale $\lambda_j$ lets an individual
-coefficient deviate from that global behaviour. Reparametrising as
-$\kappa_j = 1/(1+\lambda_j^2) \in [0,1]$ gives a shrinkage weight: $\kappa_j
-\to 0$ means the coefficient is left essentially free (signal), $\kappa_j \to
-1$ means it is pulled to zero (noise).
+logDepDelay    <- log1p(train$Departure.Delay.in.Minutes)
+signedLogArr   <- sign(train$ArrivalDelay.Residual) * log1p(abs(train$ArrivalDelay.Residual))
 
-```{r jags-model-spec}
-model_string_hs <- "
+Age_std         <- std(train$Age)
+FlightDist_std  <- std(train$Flight.Distance)
+logDepDelay_std <- std(logDepDelay)
+
+obs  <- !is.na(signedLogArr)
+mu_a <- mean(signedLogArr[obs]); sd_a <- sd(signedLogArr[obs])
+arr_delay_std <- (signedLogArr - mu_a) / sd_a
+n_missing_arr <- sum(is.na(arr_delay_std))
+
+Class_EcoPlus  <- as.integer(train$Class == "Eco Plus")
+Class_Business <- as.integer(train$Class == "Business")
+TypeTravel_Personal <- as.integer(train$Type.of.Travel == "Personal Travel")
+CustType_disloyal   <- as.integer(train$Customer.Type == "disloyal Customer")
+
+X_extra <- cbind(Age_std, FlightDist_std, Class_EcoPlus, Class_Business,
+                  logDepDelay_std, TypeTravel_Personal, CustType_disloyal)
+
+X_full <- cbind(X_service, X_extra)
+P <- ncol(X_full)
+```
+
+`r P` predictors go into the design matrix (`r ncol(X_service)` service
+items + `r ncol(X_extra)` covariates from Section 02), plus the arrival
+delay residual as a 22nd, separately-handled coefficient -- exactly the
+"~20+ predictors, many mutually correlated" scale the roadmap called for.
+As in Section 02, the single missing arrival-delay residual
+(`r n_missing_arr` row) is kept as a partly-missing stochastic vector
+rather than dropped.
+
+# Model specification
+
+$$
+y_i \mid p_i \sim \text{Bernoulli}(p_i), \qquad
+\text{logit}(p_i) = \beta_0 + x_i\beta + \beta_{\text{arr}}\,\text{arr\_delay}_i,
+$$
+
+$$
+\beta_j \mid \lambda_j, \tau \sim \mathscr{N}(0, \lambda_j^2 \tau^2), \qquad
+\lambda_j \sim \mathscr{C}^+(0,1), \qquad \tau \sim \mathscr{C}^+(0,1),
+$$
+
+with the arrival-delay coefficient $\beta_{\text{arr}}$ given its own
+local scale $\lambda_{\text{arr}}$ under the **same** global $\tau$, so
+it competes for signal on equal footing with the other 21 predictors.
+Following the JAGS notes, the half-Cauchy priors are implemented as a
+Student-t with 1 degree of freedom truncated to the positive reals:
+`lambda[j] ~ dt(0, 1, 1) T(0, )`.
+
+```{r model-code}
+model_code <- '
 model {
   for (i in 1:n) {
     y[i] ~ dbern(p[i])
-    logit(p[i]) <- beta0 + inprod(X[i,], beta[])
-    log_lik[i]  <- logdensity.bern(y[i], p[i])   # stored now, used for WAIC/PSIS-LOO in Section 5
+    logit(p[i]) <- beta0 + inprod(X[i,], beta) + beta_arr * arr_delay[i]
+    log_lik[i] <- logdensity.bern(y[i], p[i])
+    arr_delay[i] ~ dnorm(0, 1)
   }
   beta0 ~ dnorm(0, 0.01)
 
-  for (j in 1:p_hs) {
-    beta[j]      ~ dnorm(0, prec.beta[j])
-    prec.beta[j] <- 1 / (lambda[j] * lambda[j] * tau * tau)
-    # half-Cauchy(0,1) local shrinkage = Student-t(1 df) truncated to positives
-    lambda[j]    ~ dt(0, 1, 1) T(0, )
+  for (j in 1:P) {
+    beta[j] ~ dnorm(0, prec_beta[j])
+    prec_beta[j] <- 1 / (lambda[j] * lambda[j] * tau * tau)
+    lambda[j] ~ dt(0, 1, 1) T(0, )
   }
-  # half-Cauchy(0,1) global shrinkage
+
+  beta_arr ~ dnorm(0, prec_arr)
+  prec_arr <- 1 / (lambda_arr * lambda_arr * tau * tau)
+  lambda_arr ~ dt(0, 1, 1) T(0, )
+
   tau ~ dt(0, 1, 1) T(0, )
-}
-"
-
-jags_data_hs <- list(y = y, X = X_hs, n = n, p_hs = p_hs)
-
-n.adapt  <- 1000
-burn     <- 5000
-n.iter   <- 10000
-thin     <- 10
-n.chains <- 4
-
-set.seed(2026)
-jm_hs <- jags.model(textConnection(model_string_hs), data = jags_data_hs,
-                     n.chains = n.chains, n.adapt = n.adapt)
-update(jm_hs, n.iter = burn)
-
-samples_hs <- coda.samples(jm_hs,
-                            variable.names = c("beta0", "beta", "lambda", "tau", "log_lik"),
-                            n.iter = n.iter, thin = thin)
-
-saveRDS(samples_hs, "data/samples_hs.rds")  # so Section 4/5 can reuse it without refitting
-
-# DIC, the criterion used in the change-point lecture notebook alongside WAIC.
-# dic.samples() needs the compiled model object, not just the draws, so it has
-# to be computed here rather than in Section 5 from the saved .rds. Saved
-# separately so Section 5 can compare it against the flat model's DIC.
-dic_hs <- dic.samples(jm_hs, n.iter = 2000, type = "pD")
-print(dic_hs)
-saveRDS(dic_hs, "data/dic_hs.rds")
+}'
 ```
 
-## Convergence diagnostic
+`log_lik[i]` is written into the model from the start, as planned, so
+Section 05 can pull WAIC/PSIS-LOO for this model without refitting it.
 
-```{r trace plots}
-samp_mat <- as.matrix(samples_hs)
-beta_cols_hs <- paste0("beta[", 1:p_hs, "]")
+# Fitting
 
-# Convergence: chains agreeing with each other
-gelman.diag(samples_hs[, c("beta0", beta_cols_hs, "tau")], multivariate = FALSE)
+The horseshoe mixes more slowly than the vague-prior model of Section 02
+because of the heavy-tailed half-Cauchy hyperpriors, so we budget a
+longer burn-in and thinning from the outset. This is also a
+computationally heavier model (22 coefficients, 22 local scales, one
+global scale, versus Section 02's 9), fit here on a single-core sandbox,
+so the settings below are deliberately modest; a workstation could
+comfortably run this for longer.
 
-# Mixing efficiency
-effectiveSize(samples_hs[, c("beta0", beta_cols_hs)])
-effectiveSize(samples_hs[, grep("^lambda\\[", varnames(samples_hs))])
+```{r fit-horseshoe, cache=TRUE}
+set.seed(123)
 
-# One representative trace plot per "regime": a shrunk coefficient vs a surviving one
-plot(samples_hs[, "beta[1]"])
-plot(samples_hs[, "beta[9]"])
+dataList <- list(y = train$y, X = X_full, arr_delay = arr_delay_std,
+                  n = nrow(X_full), P = P)
 
-# Save trace + density plots for the report appendix. beta[9] is the least
-# shrunk coefficient (customer type), beta[1] one of the more shrunk ones,
-# and tau is the global scale, which mixes the slowest of the three.
-dir.create("figs", showWarnings = FALSE)
-png("figs/trace_horseshoe.png", width = 8, height = 8, units = "in", res = 150)
-par(mfrow = c(3, 2))
-plot(samples_hs[, "beta[9]"], auto.layout = FALSE)
-plot(samples_hs[, "beta[1]"], auto.layout = FALSE)
-plot(samples_hs[, "tau"],     auto.layout = FALSE)
-invisible(dev.off())
+m <- jags.model(textConnection(model_code), data = dataList,
+                 n.chains = 3, n.adapt = 500, quiet = TRUE)
+update(m, 3000)
+samples <- coda.samples(m, variable.names = c("beta0", "beta", "beta_arr",
+                                               "lambda", "lambda_arr", "tau", "log_lik"),
+                         n.iter = 4000, thin = 3)
 ```
 
-All four chains agree closely: R-hat is 1.00 everywhere (1.01 at most, even
-for $\tau$), so there is no evidence the chains are sampling different
-posteriors. Effective sample size on the $\beta_j$'s ranges from about 1600
-to 4500 — comfortably enough for stable posterior summaries. The $\lambda_j$'s
-mix more slowly, as expected (ESS roughly 530–2650): the two lowest-ESS
-local-scale parameters correspond to the two coefficients whose $\kappa_j$
-sits closest to the 0.5 boundary (seat comfort and online boarding) — a
-coefficient the model is genuinely undecided about forces the sampler to
-explore both shrinkage regimes, slowing mixing relative to the clear-cut
-cases. No further tuning is needed; the run is closed.
+# Diagnostics
 
-```{r kappa-plot}
-lambda_mat <- samp_mat[, grep("^lambda\\[", colnames(samp_mat))]
+```{r diagnostics}
+beta_cols   <- c(paste0("beta[", 1:P, "]"), "beta0", "beta_arr", "tau", "lambda_arr")
+lambda_cols <- c(paste0("lambda[", 1:P, "]"), "lambda_arr")
+
+gd_beta <- gelman.diag(samples[, beta_cols], multivariate = FALSE)
+gd_lam  <- gelman.diag(samples[, lambda_cols], multivariate = FALSE)
+
+ess_beta <- effectiveSize(samples[, beta_cols])
+ess_lam  <- effectiveSize(samples[, lambda_cols])
+
+cat("beta / beta0 / beta_arr / tau -- max R-hat:", round(max(gd_beta$psrf[, 1]), 4), "\n")
+cat("beta / beta0 / beta_arr / tau -- ESS range:", round(range(ess_beta)), "\n\n")
+cat("lambda_j -- R-hat range:", round(range(gd_lam$psrf[, 1]), 4), "\n")
+cat("lambda_j -- ESS range:", round(range(ess_lam)), "\n")
+```
+
+```{r trace-plots, fig.width=8, fig.height=4}
+par(mfrow = c(1, 2))
+plot(samples[, "tau"], trace = TRUE, density = FALSE, main = "tau (global shrinkage)", auto.layout = FALSE)
+plot(samples[, "beta[21]"], trace = TRUE, density = FALSE, main = "beta[21] (disloyal Customer)", auto.layout = FALSE)
+par(mfrow = c(1, 1))
+```
+
+As in the course's own horseshoe example: `beta` -- the parameter we
+actually care about -- converges well (max R-hat
+`r sprintf("%.3f", max(gd_beta$psrf[, 1]))`, comfortably under 1.05).
+Several individual `lambda_j` show higher R-hat (up to
+`r sprintf("%.3f", max(gd_lam$psrf[, 1]))`), which is the well-documented
+behaviour of local shrinkage parameters for coefficients close to zero:
+when $\beta_j \approx 0$, the likelihood barely distinguishes a large
+$\lambda_j$ from a small one, so those particular chains mix more slowly.
+Since inference is reported on $\beta_j$ and $\kappa_j$ (a smooth,
+bounded transform of $\lambda_j$) rather than on raw $\lambda_j$ values,
+this is a known, accepted limitation rather than a fitting error.
+
+# The shrinkage weights $\kappa_j$
+
+```{r kappa-compute}
+sm <- as.matrix(samples)
+beta_cols_only   <- c(paste0("beta[", 1:P, "]"), "beta_arr")
+lambda_cols_only <- c(paste0("lambda[", 1:P, "]"), "lambda_arr")
+
+beta_mat   <- sm[, beta_cols_only]
+lambda_mat <- sm[, lambda_cols_only]
 kappa_mat  <- 1 / (1 + lambda_mat^2)
-colnames(kappa_mat) <- colnames(X_hs)
+
+post_beta  <- colMeans(beta_mat)
 post_kappa <- colMeans(kappa_mat)
+names(post_kappa) <- beta_cols_only
+beta_ci <- apply(beta_mat, 2, quantile, c(0.025, 0.975))
 
-kappa_df <- data.frame(Predictor = names(post_kappa), Kappa = as.numeric(post_kappa)) %>%
-  arrange(Kappa) %>%
-  mutate(Predictor = factor(Predictor, levels = Predictor),
-         Status = ifelse(Kappa < 0.5, "Kept (signal)", "Shrunk to ~0"))
+term_labels <- c(
+  "beta[1]" = "Seat comfort", "beta[2]" = "Dep/Arr time convenient", "beta[3]" = "Food and drink",
+  "beta[4]" = "Gate location", "beta[5]" = "Inflight wifi service", "beta[6]" = "Inflight entertainment",
+  "beta[7]" = "Online support", "beta[8]" = "Ease of Online booking", "beta[9]" = "On-board service",
+  "beta[10]" = "Leg room service", "beta[11]" = "Baggage handling", "beta[12]" = "Checkin service",
+  "beta[13]" = "Cleanliness", "beta[14]" = "Online boarding", "beta[15]" = "Age", "beta[16]" = "Flight Distance",
+  "beta[17]" = "Class: Eco Plus", "beta[18]" = "Class: Business", "beta[19]" = "log(1+Departure Delay)",
+  "beta[20]" = "Personal Travel", "beta[21]" = "disloyal Customer", "beta_arr" = "Arrival delay residual"
+)
 
-p_kappa <- ggplot(kappa_df, aes(x = Predictor, y = Kappa, fill = Status)) +
-  geom_col() +
+kappa_tbl <- data.frame(
+  term = term_labels[beta_cols_only],
+  kappa = round(post_kappa[beta_cols_only], 3),
+  beta_mean = round(post_beta[beta_cols_only], 3),
+  beta_lo = round(beta_ci[1, beta_cols_only], 3),
+  beta_hi = round(beta_ci[2, beta_cols_only], 3)
+) %>% arrange(kappa)
+
+knitr::kable(kappa_tbl, row.names = FALSE,
+             caption = "kappa_j near 0 = signal (unshrunk); near 1 = shrunk towards noise")
+```
+
+Saved for reuse in Sections 04 and 05 (posterior means, credible
+intervals and shrinkage weights only -- not the full posterior draws,
+which would be several tens of MB):
+
+```{r save-horseshoe-summary}
+saveRDS(list(post_kappa = post_kappa, post_beta = post_beta, beta_ci = beta_ci,
+             term_labels = term_labels, beta_cols = beta_cols_only),
+        "horseshoe_summary.rds")
+```
+
+```{r kappa-plot, fig.width=8, fig.height=6}
+kappa_df <- as.data.frame(kappa_mat)
+colnames(kappa_df) <- term_labels[beta_cols_only]
+kappa_long <- pivot_longer(kappa_df, cols = everything(), names_to = "Predictor", values_to = "Kappa")
+kappa_long$Predictor <- factor(kappa_long$Predictor,
+                                levels = kappa_tbl$term[order(-kappa_tbl$kappa)])
+
+ggplot(kappa_long, aes(x = Predictor, y = Kappa)) +
+  geom_violin(fill = "steelblue", alpha = 0.7, scale = "width") +
+  geom_hline(yintercept = 0.5, color = "red", linetype = "dashed") +
   coord_flip() +
-  geom_hline(yintercept = 0.5, linetype = "dashed", color = "black") +
-  scale_fill_manual(values = c("Kept (signal)" = "firebrick", "Shrunk to ~0" = "grey70")) +
   labs(title = "Horseshoe shrinkage weights",
-       y = expression(kappa[j] ~ "(posterior mean)"), x = NULL, fill = NULL) +
-  theme_minimal()
-
-ggsave("figs/horseshoe_kappa.png", p_kappa, width = 7, height = 6, dpi = 150)
-p_kappa
+       subtitle = expression("near 0 (right) = signal preserved; near 1 (left) = shrunk towards zero"),
+       y = expression(kappa[j]), x = NULL) +
+  theme_minimal(base_size = 10)
 ```
 
-Only two predictors sit at a clear extreme: customer type ($\kappa_j \approx
-0.08$) is the strongest surviving signal, and the arrival-delay residual
-($\kappa_j \approx 0.79$) is the most confidently shrunk. Most of the
-remaining 20 predictors fall in a graduated middle band (roughly
-$0.4$–$0.7$) rather than the sharp bimodal split the horseshoe's marginal
-prior (a $\text{Beta}(1/2,1/2)$ on $\kappa_j$) might suggest — that shape
-describes the *prior*, not a guarantee about the posterior. With $n \approx
-1200$ and predictors that each carry a genuine partial signal, the data are
-not sharp enough to force every coefficient decisively one way or the other,
-which is an honest finding rather than a fitting problem. Within the two
-correlated clusters identified in Section 0, the effect is only partial: in
-the wifi/online-support/ease-of-booking/online-boarding cluster no single
-item clearly dominates (all four sit in the $0.47$–$0.74$ range), whereas in
-the onboard-service/legroom/baggage/cleanliness cluster onboard service
-($\kappa_j \approx 0.42$) separates somewhat more clearly from the other
-three ($0.58$–$0.69$).
-
-## Flat prior vs horseshoe: quantifying the shrinkage
-
-The flat-prior model is refit here (rather than reloaded), each section reads
-`train_subsample.csv` from disk rather than depending on objects left over
-from another file. Refitting the nine-covariate model only takes a few
-seconds.
-
-```{r flat-refit}
-X_flat <- model.matrix(~ age_z + seat_comfort_z + flight_distance_z + cabin_class +
-                          dep_delay_z + arr_delay_extra_z + travel_type + customer_type,
-                        data = train)[, -1]
-p_flat <- ncol(X_flat)
-
-model_string_flat <- "
-model {
-  for (i in 1:n) {
-    y[i] ~ dbern(p[i])
-    logit(p[i]) <- beta0 + inprod(X[i,], beta[])
-  }
-  beta0 ~ dnorm(0, 0.01)
-  for (j in 1:p_flat) { beta[j] ~ dnorm(0, 0.01) }
-}
-"
-jm_flat <- jags.model(textConnection(model_string_flat),
-                       data = list(y = y, X = X_flat, n = n, p_flat = p_flat),
-                       n.chains = 4, n.adapt = 1000)
-update(jm_flat, n.iter = 2000)
-samples_flat <- coda.samples(jm_flat, variable.names = c("beta0", "beta"), n.iter = 2000)
-flat_mat <- as.matrix(samples_flat)
-
-flat_names <- colnames(X_flat)
-flat_summary <- data.frame(
-  Predictor = flat_names,
-  Mean  = colMeans(flat_mat[, paste0("beta[", seq_along(flat_names), "]")]),
-  Lower = apply(flat_mat[, paste0("beta[", seq_along(flat_names), "]")], 2, quantile, 0.025),
-  Upper = apply(flat_mat[, paste0("beta[", seq_along(flat_names), "]")], 2, quantile, 0.975),
-  Model = "Flat prior (Section 2)"
-)
-
-hs_idx <- match(flat_names, colnames(X_hs))
-hs_summary <- data.frame(
-  Predictor = flat_names,
-  Mean  = colMeans(samp_mat[, paste0("beta[", hs_idx, "]")]),
-  Lower = apply(samp_mat[, paste0("beta[", hs_idx, "]")], 2, quantile, 0.025),
-  Upper = apply(samp_mat[, paste0("beta[", hs_idx, "]")], 2, quantile, 0.975),
-  Model = "Horseshoe (Section 3)"
-)
-
-compare_df <- bind_rows(flat_summary, hs_summary)
-
-p_compare <- ggplot(compare_df, aes(x = Predictor, y = Mean, color = Model)) +
-  geom_pointrange(aes(ymin = Lower, ymax = Upper), position = position_dodge(width = 0.5)) +
-  coord_flip() +
-  geom_hline(yintercept = 0, linetype = "dashed") +
-  labs(title = "Flat-prior vs horseshoe coefficients (shared covariates)",
-       y = expression(beta[j]), x = NULL) +
-  theme_minimal()
-
-ggsave("figs/flat_vs_horseshoe.png", p_compare, width = 7, height = 5, dpi = 150)
-p_compare
+```{r beta-plot, fig.width=7, fig.height=6}
+kappa_tbl %>%
+  mutate(term = factor(term, levels = term[order(kappa)])) %>%
+  ggplot(aes(x = beta_mean, y = term, color = kappa < 0.5)) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "grey40") +
+  geom_errorbarh(aes(xmin = beta_lo, xmax = beta_hi), height = 0.2) +
+  geom_point(size = 2.2) +
+  scale_color_manual(values = c("TRUE" = "#185FA5", "FALSE" = "grey60"), guide = "none") +
+  labs(title = "Posterior coefficients under the horseshoe prior",
+       subtitle = "Blue = kappa < 0.5 (signal); grey = kappa >= 0.5 (shrunk)",
+       x = expression(beta[j]), y = NULL) +
+  theme_minimal(base_size = 10)
 ```
 
-Business class shrinks from roughly 1.5 (flat) to 0.85 (horseshoe) but its
-credible interval stays clearly above zero, a real effect, just resized
-once it has to compete against 13 additional correlated predictors. Customer
-type barely moves at all, protected even inside a 22-predictor model.
-Departure delay and age shift a little closer to zero under the horseshoe,
-consistent with their $\kappa_j$ sitting in the $0.5$–$0.6$ range. Economy
-Plus and the arrival-delay residual were never distinguishable from zero in
-either model, the horseshoe simply confirms what the flat prior already
-suggested.
+# Interpretation
 
-## Summary
+Three things stand out, and all three are genuinely new information
+relative to Section 02, not just a re-confirmation of it.
 
-The horseshoe model converges cleanly on all 22 predictors. Customer type and
-the two cabin-class dummies remain robust signal; the arrival-delay residual,
-wifi, and gate location are the most confidently shrunk. Most service items
-fall in an honestly uncertain middle band rather than a clean split. The
-fitted samples (including `log_lik` for later WAIC/PSIS-LOO comparison) are
-saved to `data/samples_hs.rds` for reuse in Sections 4 and 5.
+**The "booking/connectivity" cluster visibly competes.** `Ease of Online
+booking` ($\kappa=$ `r kappa_tbl$kappa[kappa_tbl$term=="Ease of Online booking"]`)
+and `Online support` ($\kappa=$ `r kappa_tbl$kappa[kappa_tbl$term=="Online support"]`)
+are preserved noticeably more than the two other members of the same
+correlated cluster from Section 00, `Online boarding`
+($\kappa=$ `r kappa_tbl$kappa[kappa_tbl$term=="Online boarding"]`) and
+`Inflight wifi service`
+($\kappa=$ `r kappa_tbl$kappa[kappa_tbl$term=="Inflight wifi service"]`,
+the single most shrunk item in the whole model). This is exactly the
+mechanism the horseshoe was chosen for: four mutually correlated items
+compete, and the prior lets two of them carry the signal while treating
+the other two as largely redundant, instead of us picking one by hand.
+
+**`Class: Business` shrinks once service quality is in the model.**
+In Section 02, Business class alone carried an odds ratio of about 4.1.
+Here, with all 14 service ratings included, its coefficient drops to
+`r kappa_tbl$beta_mean[kappa_tbl$term=="Class: Business"]`
+($\kappa=$ `r kappa_tbl$kappa[kappa_tbl$term=="Class: Business"]`, credible
+interval crossing zero). The natural reading is mediation, not
+disappearance: Business passengers are more satisfied largely *because*
+they experience better seat comfort, entertainment, and service --
+`Class` was partly standing in for those ratings in Section 02 simply
+because they weren't in the model yet.
+
+**`Personal Travel` gets *stronger*, not weaker.** Section 02 found this
+covariate's effect nearly explained away by `Class`. Here, once the
+service ratings are controlling for the *quality* of the trip
+experience, `Personal Travel` re-emerges as one of the strongest and
+most confidently negative effects in the model
+($\kappa=$ `r kappa_tbl$kappa[kappa_tbl$term=="Personal Travel"]`, credible
+interval `r kappa_tbl$beta_lo[kappa_tbl$term=="Personal Travel"]` to
+`r kappa_tbl$beta_hi[kappa_tbl$term=="Personal Travel"]`, entirely below
+zero). Section 02's finding and this one are not contradictory: they
+show that the earlier attenuation was specifically about `Class`
+soaking up part of the travel-type signal, not about travel type being
+unimportant.
+
+A smaller, more cautionary finding: `Departure/Arrival time convenient`
+has a *negative* posterior mean
+(`r kappa_tbl$beta_mean[kappa_tbl$term=="Dep/Arr time convenient"]`,
+credible interval excluding zero) -- higher ratings associated with
+*lower* satisfaction. Taken at face value this is counter-intuitive.
+Recall from Section 00 that this item has one of the largest shares of
+structural zeros and sits in its own correlated cluster with `Seat
+comfort`, `Food and drink` and `Gate location`; we flagged, but did not
+yet resolve, the possibility that its zeros encode "not applicable"
+rather than genuine dissatisfaction. This coefficient is a candidate
+symptom of that ambiguity rather than a reliable substantive finding,
+and we revisit it directly in Section 05's structural-zero robustness
+check.
+
+`disloyal Customer` remains, by a wide margin, the single strongest and
+most confidently preserved effect in the entire model
+($\kappa=$ `r kappa_tbl$kappa[kappa_tbl$term=="disloyal Customer"]`) --
+consistent across Sections 01, 02 and 03 regardless of how much else is
+in the model.
