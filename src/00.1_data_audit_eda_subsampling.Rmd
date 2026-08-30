@@ -35,7 +35,7 @@ BAS, ...) then refers to the same clean names instead of re-deriving
 them each time.
 
 ```{r}
-raw <- read.csv("Airline_customer_satisfaction.csv", stringsAsFactors = FALSE)
+raw <- read.csv("../data/Airline_customer_satisfaction.csv", stringsAsFactors = FALSE)
 
 new_names <- c(
   "satisfaction", "customer_type", "age", "travel_type", "cabin_class",

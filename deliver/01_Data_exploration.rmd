@@ -1,0 +1,348 @@
+---
+title: "01 - Data exploration
+subtitle: "Airline Customer Satisfaction -- Bayesian Learning & Monte Carlo Simulations, 2026"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE,
+                      fig.align = "center", cache = FALSE)
+
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(corrplot)
+library(caret)
+library(RColorBrewer)
+
+rm(list = ls())
+set.seed(2026)
+```
+
+## 0. Dataset import
+
+```{r}
+# dataset loading
+
+raw <- read.csv("../data/Airline_customer_satisfaction.csv", stringsAsFactors = FALSE)
+
+# manually set "satisfied" class encoding to 1 (later use)
+raw <- raw %>%
+  mutate(
+    satisfaction   = factor(satisfaction, levels = c("dissatisfied", "satisfied")),
+    # even if for this variables their factor won't be relevant during prediction,  is still useful for data exploration
+    Class          = factor(Class, levels = c("Eco", "Eco Plus", "Business"), ordered = TRUE),
+    Customer.Type  = factor(Customer.Type),
+    Type.of.Travel = factor(Type.of.Travel)
+  )
+
+```
+
+In order to make the columns easier to manager, we change the column's names, switching to `camel_case` notation.
+
+```{r}
+new_names <- c(
+  "satisfaction", "customer_type", "age", "travel_type", "cabin_class",
+  "flight_distance", "seat_comfort", "time_convenient", "food_drink",
+  "gate_location", "wifi", "entertainment", "online_support", "ease_booking",
+  "onboard_service", "legroom", "baggage", "checkin", "cleanliness",
+  "online_boarding", "dep_delay", "arr_delay"
+)
+
+names(raw) <- new_names
+dim(raw)
+```
+
+## 1. Dataset exploration
+
+Explore general dataset properties.
+
+```{r}
+# general info
+str(raw)
+
+# check for duplicated rows
+cat("Duplicated rows:", sum(duplicated(raw)), "\n")
+
+# find and locate missing values
+na_counts <- colSums(is.na(raw))
+na_counts[na_counts > 0]
+```
+
+The only column missing values is (`r na_counts["arr_delay"]` rows, `r round(100*na_counts["arr_delay"]/nrow(raw), 2)`% of the data). Given the small percentage of missing values, we decided to drop those records sine probably it won't impact the outcome.
+
+```{r}
+nrow(raw)
+raw <- raw %>% filter(!is.na(arr_delay))
+raw$row_id <- seq_len(nrow(raw))
+nrow(raw)
+```
+
+Now we check variable domain, especially whether all service-quality items lay within the range 0-5.
+
+```{r}
+col_filter = c("age", "flight_distance", "seat_comfort", "time_convenient", "food_drink", "gate_location", "wifi", "entertainment", "online_support", "ease_booking", "onboard_service", "legroom", "baggage", "checkin", "cleanliness", "online_boarding", "dep_delay", "arr_delay")
+
+sapply(raw[col_filter], range)
+```
+
+All quality service variables range over 0-5. The remaining numeric variables also look sane: `age` in [`r min(raw$age)`, `r max(raw$age)`], `flight_distance` in [`r min(raw$flight_distance)`, `r max(raw$flight_distance)`] miles, except for `arr_delay` due the presence f NaN.
+
+### 1.1 Target variable class balance
+
+```{r}
+# check and lot target class balance
+
+pal <- c(dissatisfied = "#eb6834", satisfied = "#2a78d6")
+
+bal <- raw %>%
+  count(satisfaction) %>%
+  mutate(share = n / sum(n),
+         satisfaction = factor(satisfaction, levels = c("dissatisfied", "satisfied")))
+
+ggplot(bal, aes(satisfaction, n, fill = satisfaction)) +
+  geom_col(width = 0.6, show.legend = FALSE) +
+  geom_text(aes(label = sprintf("%d\n(%.1f%%)", n, 100 * share)),
+            vjust = -0.3, size = 4, colour = "#52514e", lineheight = 0.95) +
+  scale_fill_manual(values = pal) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.18))) +
+  labs(title = "Class balance of the target variable",
+       subtitle = sprintf("Training subsample, n = %d", nrow(train)),
+       x = NULL, y = "customers") +
+  theme_minimal(base_size = 12) +
+  theme(panel.grid.major.x = element_blank(), panel.grid.minor = element_blank())
+```
+
+The response is close to balanced (`r round(100*mean(raw$satisfaction == "satisfied"),1)`% satisfied), therefore we won't need something more complex than a Bernoulli+logistic regression model.
+
+### 1.2 Boxplots
+
+```{r}
+# we modify categorical variables in order to show them in the boxplots and correlation matrix
+
+num.raw = raw
+cat_vars = names(num.raw)[!sapply(num.raw, is.numeric)]
+
+mappings <- lapply(num.raw[cat_vars], levels)
+num.raw[cat_vars] <- lapply(num.raw[cat_vars], as.integer)
+```
+
+```{r fig.width=16, fig.height=14}
+num.raw %>%
+  select(where(is.numeric)) %>%
+  pivot_longer(everything(), names_to = "variable", values_to = "value") %>%
+  ggplot(aes(x = variable, y = value, fill = variable)) +
+  geom_boxplot(show.legend = FALSE) +
+  facet_wrap(~ variable, scales = "free") +
+  scale_fill_viridis_d() +
+  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
+```
+
+### 1.2.1 Quality of Service indicators by satisfaction
+
+```{r}
+qs_vars <- c("seat_comfort", "time_convenient", "food_drink", "gate_location", "wifi", "entertainment", "online_support", "ease_booking", "onboard_service", "legroom", "baggage", "checkin", "cleanliness", "online_boarding")
+
+raw %>%
+  select(satisfaction, all_of(qs_vars)) %>%
+  pivot_longer(-satisfaction, names_to = "item", values_to = "rating") %>%
+  ggplot(aes(x = satisfaction, y = rating, fill = satisfaction)) +
+  geom_boxplot(outlier.size = 0.4, alpha = 0.85) +
+  facet_wrap(~ item, ncol = 4, scales = "free_y") +
+  scale_fill_manual(values = c("dissatisfied" = "#D85A30", "satisfied" = "#3B6D11")) +
+  labs(title = "Service-quality ratings by satisfaction outcome",
+       x = NULL, y = "Rating (0-5)") +
+  theme_minimal(base_size = 9) +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 0),
+        strip.text = element_text(face = "bold", size = 7.5))
+```
+
+The customer satisfaction per item follows the same pattern expressed by the correlation between the QS variable and the respective correlation (see below). Generally speaking we can see that the higher the customer satisfaction the higher the QS was.
+
+### 1.3 Full correlation heatmap
+
+```{r fig.width=12, fig.height=10}
+
+corr_mat = cor(num.raw[, !names(num.raw) == "row_id"])
+corrplot(corr_mat, method = "color", type = "upper", order = "hclust",
+         col = colorRampPalette(rev(brewer.pal(9, "RdBu")))(200),
+         tl.col = "black", tl.srt = 45, tl.cex = 0.75,
+         addCoef.col = "black", number.cex = 0.55,
+         diag = FALSE,
+         title = "Correlation matrix of the 14 service-quality items\n(hierarchical clustering order)",
+         mar = c(0, 0, 2, 0))
+```
+
+### 1.3.1 Quality service correlation
+
+```{r fig.width=12, fig.height=10}
+# focus on the correlation between Quality of Service variables
+
+# re-defining them for clarity
+qs_vars <- c("seat_comfort", "time_convenient", "food_drink", "gate_location", "wifi", "entertainment", "online_support", "ease_booking", "onboard_service", "legroom", "baggage", "checkin", "cleanliness", "online_boarding")
+
+
+qs_corr <- cor(num.raw[, qs_vars], use = "pairwise.complete.obs")
+
+corrplot(qs_corr, method = "color", type = "upper", order = "hclust",
+         col = colorRampPalette(rev(brewer.pal(9, "RdBu")))(200),
+         tl.col = "black", tl.srt = 45, tl.cex = 0.75,
+         addCoef.col = "black", number.cex = 0.55,
+         diag = FALSE,
+         title = "Correlation matrix of the 14 service-quality variables",
+         mar = c(0, 0, 2, 0))
+```
+
+from the quality of service correlation matrix we can distinguish 3 clusters of variables.
+
+```{r}
+cluster_range <- function(items) {
+  sub <- qs_corr[items, items]
+  vals <- sub[upper.tri(sub)]
+  sprintf("%.2f-%.2f", min(vals), max(vals))
+}
+
+
+cluster_booking  <- c("wifi", "entertainment", "online_support", "ease_booking")
+
+cluster_onboard  <- c("onboard_service", "legroom", "baggage")
+
+cluster_catering <- c("seat_comfort", "food_drink", "gate_location")
+
+r_booking  <- cluster_range(cluster_booking)
+r_onboard  <- cluster_range(cluster_onboard)
+r_catering <- cluster_range(cluster_catering)
+
+r_booking
+r_onboard
+r_catering
+```
+
+- **Booking / connectivity**: `Inflight wifi service`, `Online support`, `Ease of Online booking`, `Online boarding` move together (pairwise correlations `r r_booking`).
+- **On-board comfort**: `On-board service`, `Leg room service`, `Baggage handling`, `Cleanliness` form a second cluster (`r r_onboard`).
+- **Seat / catering / ground experience**: `Seat comfort`, `Food and drink`, `Departure/Arrival time convenient`, `Gate location` form a third, slightly tighter cluster (`r r_catering`).
+
+### 1.4 Structural zeros in quality of service variables
+
+Several quality of service show a suspiciously large share of exact `0` ratings, which plausibly encode "not applicable" (e.g. no on-board wifi on some flights) rather than a genuine bottom-of-scale rating.
+
+```{r structural-zeros}
+zero_share <- sort(sapply(raw[, qs_vars], function(x) mean(x == 0)),
+                    decreasing = TRUE)
+
+knitr::kable(
+  data.frame(item = names(zero_share), zero_share = round(zero_share, 3)),
+  row.names = FALSE, col.names = c("Service item", "Share of rows = 0"),
+  caption = "Share of rows recording a 0 rating, by service item"
+)
+```
+
+We flag, but do not model, the items with a non-trivial zero share (above 2%) as a single per-row indicator, to be used later only as a robustness check
+
+```{r}
+zero_candidates <- names(zero_share)[zero_share > 0.02]
+
+raw <- raw %>%
+  mutate(structural_zero_flag = if_any(all_of(zero_candidates), ~ .x == 0))
+
+n_flagged <- sum(raw$structural_zero_flag)
+n_flagged
+```
+
+## 2. Data augmentation
+
+In the following section we modify our dataset.
+
+### 2.1 Decorrelating Departure and Arrival delay
+
+```{r delay-collinearity}
+delay_cor <- cor(raw$dep_delay, raw$arr_delay, use = "complete.obs")
+n_missing_arr <- sum(is.na(raw$arr_delay))
+```
+
+`Departure Delay` and `Arrival Delay` correlate at `r sprintf("%.3f", delay_cor)`: using both raw would be close to duplicating one variable.
+
+We tought about two solutions:
+
+- taking the difference between them and accounting for the "mid-fly delay"
+
+- enriching the previous concept and regress `Arrival Delay` on `Departure Delay` and keep the **residual** as a second covariate -- by construction uncorrelated with `Departure Delay`, and interpretable as "minutes gained or lost in the air relative to what the departure delay alone would predict":
+
+```{r delay-residual}
+# exploring the 
+
+delay_fit <- lm(arr_delay ~ dep_delay, data = raw)
+
+raw$arr_delay_res <- NA_real_
+raw$arr_delay_res[!is.na(raw$arr_delay_res)] <- residuals(delay_fit)
+
+check_cor <- cor(raw$dep_delay, raw$arr_delay, use = "complete.obs")
+```
+
+The fitted relationship is Arrival $\approx$ `r sprintf("%.2f", coef(delay_fit)[1])` $+$ `r sprintf("%.3f", coef(delay_fit)[2])` $\times$ Departure (R$^2$ = `r sprintf("%.3f", summary(delay_fit)$r.squared)`).
+
+Given that the slope is almost one and the intercept is just `coef(delay_fit)[1]` minutes, we opted for the simple difference as solution, given the simplicity and higher interpretability.
+
+```{r}
+raw$midfly_delay <- raw$arr_delay - raw$dep_delay
+```
+
+## 3. Data stratification, split and storage
+
+In the remaining part we stratify the dataset for the model, we split it and we store it for later use.
+
+### 3.1 Data stratification and split
+
+The brief describes a curated 1,000-row file; we have the full `r format(n_total, big.mark = ",")`-row source. We draw a stratified training subsample of $n \approx 1{,}200$, and we stratify it to reflect categorical variable classes proportions.
+
+```{r}
+cat_vars <- c("satisfaction", "customer_type", "travel_type", "cabin_class")
+lapply(raw[cat_vars], function(x) round(prop.table(table(x)), 3))
+```
+
+Basically all categorical variables need to be stratified.
+
+```{r}
+set.seed(123)
+
+strata <- interaction(raw$satisfaction, raw$cabin_class, raw$customer_type, raw$travel_type, drop = TRUE)
+train_idx <- createDataPartition(y = strata, p = 1200 / nrow(raw), list = FALSE)
+  
+train_df <- raw[train_idx, ]
+test_df  <- raw[-train_idx, ]
+```
+
+Training subsample: `r nrow(train_df)` rows. Held-out test set: `r format(nrow(test_df), big.mark = ",")` rows.
+
+```{r stratification-check}
+compare_tbl <- function(var) {
+  full  <- prop.table(table(raw[[var]]))
+  train <- prop.table(table(train_df[[var]]))
+  round(cbind(full = full, train = train), 3)
+}
+
+cat("Satisfaction proportions (full data vs. training subsample):\n")
+print(compare_tbl("satisfaction"))
+
+cat("\nClass proportions (full data vs. training subsample):\n")
+print(compare_tbl("Class"))
+
+cat("\nCustomer Type proportions (full data vs. training subsample):\n")
+print(compare_tbl("Customer.Type"))
+```
+
+### 3.2 Dataset storage
+
+```{r save-outputs}
+saveRDS(raw, "../data/airline_full_clean.rds")
+write.csv(train_df, "../data/airline_train_n1200.csv", row.names = FALSE)
+write.csv(test_df,  "../data/airline_test_holdout.csv", row.names = FALSE)
+```
