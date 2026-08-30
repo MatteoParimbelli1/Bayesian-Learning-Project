@@ -1,177 +1,282 @@
 ---
-title: "Section 4 — Cross-check: BAS Models"
-output: html_document
+title: "04 - Cross-check: BAS Models"
+subtitle: "Airline Customer Satisfaction -- Bayesian Learning & Monte Carlo Simulations, 2026"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
 ---
 
-
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
-```
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE,
+                       fig.align = "center", cache = FALSE)
 
-## Motivation
-
-This section fits two models with `BAS`, each serving a different purpose.
-First, a naive linear probability model (`bas.lm`), the comparison the
-project brief explicitly invites, and a concrete demonstration of why a
-Bernoulli-logit likelihood (Sections 2–3) is the right choice for a binary
-outcome. Second, an independent variable-selection check (`bas.glm`,
-Bernoulli-logit, `method = "MCMC"` since exhaustive enumeration of $2^{22}$
-models is infeasible) whose posterior inclusion probabilities give a second,
-methodologically distinct answer to the same question the horseshoe already
-asked in Section 3: which predictors carry real signal?
-
-```{r }
-rm(list = ls())
-set.seed(2026)
-
-library(BAS)
 library(dplyr)
+library(tidyr)
 library(ggplot2)
-library(ggrepel)
-library(coda)
+library(BAS)
 ```
+
+Two models, two purposes: (a) a deliberately naive linear-probability fit
+of `satisfaction` via `bas.lm`, to show concretely why it's the wrong
+likelihood for a binary outcome; (b) `bas.glm` with a binomial family,
+the natural GLM extension of the `bas.lm` workflow from the course --
+g-prior / BIC logic, Bernoulli model prior, posterior inclusion
+probabilities, BMA. This section answers the brief's own question
+("BAS or JAGS?") with "both, for different jobs": Section 03 gives one
+model with full shrinkage; this section asks whether a completely
+different estimation approach -- stochastic search over the *model
+space* itself, rather than shrinkage within one model -- lands on the
+same answer.
 
 ```{r load-data}
+train <- read.csv("airline_train_n1200.csv", stringsAsFactors = FALSE)
+train$y <- as.integer(train$satisfaction == "satisfied")
 
-rm(list = ls())
-train <- read.csv("data/train_subsample.csv", stringsAsFactors = FALSE)
-names(train) <- make.names(names(train), unique = TRUE)
+std <- function(x) as.numeric(scale(x))
 
-train$satisfaction  <- factor(train$satisfaction, levels = c("dissatisfied", "satisfied"))
-train$customer_type <- factor(train$customer_type)
-train$travel_type   <- factor(train$travel_type)
-train$cabin_class   <- factor(train$cabin_class, levels = c("Eco", "Eco Plus", "Business"))
-train$flight_distance_z <- as.numeric(scale(log1p(train$flight_distance)))
-train$dep_delay_z       <- as.numeric(scale(log1p(train$dep_delay)))
-train$arr_delay_extra_z <- as.numeric(scale(train$arr_delay_extra))
-train$age_z             <- as.numeric(scale(train$age))
-train$seat_comfort_z    <- as.numeric(scale(train$seat_comfort))
+service_items <- c("Seat.comfort", "Departure.Arrival.time.convenient", "Food.and.drink",
+                    "Gate.location", "Inflight.wifi.service", "Inflight.entertainment",
+                    "Online.support", "Ease.of.Online.booking", "On.board.service",
+                    "Leg.room.service", "Baggage.handling", "Checkin.service",
+                    "Cleanliness", "Online.boarding")
+X_service <- apply(train[, service_items], 2, std)
 
-extra_service_items <- c("time_convenient", "food_drink", "gate_location", "wifi",
-                          "entertainment", "online_support", "ease_booking",
-                          "onboard_service", "legroom", "baggage", "checkin",
-                          "cleanliness", "online_boarding")
-for (v in extra_service_items) train[[paste0(v, "_z")]] <- as.numeric(scale(train[[v]]))
-extra_service_z <- paste0(extra_service_items, "_z")
+logDepDelay  <- log1p(train$Departure.Delay.in.Minutes)
+signedLogArr <- sign(train$ArrivalDelay.Residual) * log1p(abs(train$ArrivalDelay.Residual))
 
-train$satisfaction_num <- as.numeric(train$satisfaction == "satisfied")
+Age_std         <- std(train$Age)
+FlightDist_std  <- std(train$Flight.Distance)
+logDepDelay_std <- std(logDepDelay)
 
-rhs  <- paste(c("age_z", "seat_comfort_z", "flight_distance_z", "cabin_class",
-                "dep_delay_z", "arr_delay_extra_z", "travel_type", "customer_type",
-                extra_service_z), collapse = " + ")
+obs  <- !is.na(signedLogArr)
+mu_a <- mean(signedLogArr[obs]); sd_a <- sd(signedLogArr[obs])
+arr_delay_std <- (signedLogArr - mu_a) / sd_a
 
-cat("\nrhs:\n", rhs, "\n")
-cat("contains a backtick:", grepl("`", rhs, fixed = TRUE), "\n\n")
+Class_EcoPlus  <- as.integer(train$Class == "Eco Plus")
+Class_Business <- as.integer(train$Class == "Business")
+TypeTravel_Personal <- as.integer(train$Type.of.Travel == "Personal Travel")
+CustType_disloyal   <- as.integer(train$Customer.Type == "disloyal Customer")
 
-form <- tryCatch(
-  as.formula(paste("satisfaction_num ~", rhs)),
-  error = function(e) { cat("CAUGHT AT:", deparse(conditionCall(e)), "\n"); cat("MSG:", conditionMessage(e), "\n"); NULL }
-)
-print(form)
+X_extra <- cbind(Age_std, FlightDist_std, Class_EcoPlus, Class_Business,
+                  logDepDelay_std, TypeTravel_Personal, CustType_disloyal)
+X_full <- cbind(X_service, X_extra)
 ```
 
-## The naive linear probability model
+`bas.lm`/`bas.glm` cannot use JAGS's stochastic-imputation trick for the
+one missing arrival-delay residual, so for this section only we drop
+that single row (negligible: 1 of 1203).
 
-```{r }
-bas_lm_fit <- bas.lm(form, data = train, prior = "BIC", modelprior = uniform())
+```{r drop-missing}
+keep <- !is.na(arr_delay_std)
+X_bas <- cbind(X_full[keep, ], ArrivalDelay_resid = arr_delay_std[keep])
+y_bas <- train$y[keep]
+df_bas <- data.frame(y = y_bas, X_bas)
 
-fitted_lm <- fitted(bas_lm_fit, estimator = "BMA")
-n_out <- sum(fitted_lm < 0 | fitted_lm > 1)
-cat(sprintf("Fitted probabilities outside [0,1]: %d / %d (%.1f%%), range [%.3f, %.3f]\n",
-            n_out, length(fitted_lm), 100 * n_out / length(fitted_lm),
-            min(fitted_lm), max(fitted_lm)))
+cat("Dropped", sum(!keep), "row(s); df_bas dim:", dim(df_bas), "\n")
 ```
 
-As a naive baseline, satisfaction is fit as if it were Gaussian via a linear
-probability model (BIC prior, uniform model prior, equivalent to an
-independent $\text{Bernoulli}(1/2)$ prior on each inclusion indicator). While
-computationally convenient, this is a poor fit for a binary outcome: 176 of
-1197 (14.7%) BMA-fitted probabilities fall outside $[0,1]$, ranging from
-$-0.575$ to $1.209$. A predicted probability of $-0.575$ is not a meaningful
-statement about a customer's chance of being satisfied, and this concretely
-motivates the Bernoulli-logit models of Sections 2–3.
+# (a) Linear probability model -- deliberately the wrong likelihood
 
-## The independent variable-selection cross-check
-
-```{r bas-glm-crosscheck}
-set.seed(2026)
-bas_glm_fit <- bas.glm(form, data = train,
-                        family = binomial(link = "logit"),
-                        method = "MCMC", MCMC.iterations = 50000,
-                        betaprior = bic.prior(), modelprior = uniform())
-
-pip_df <- data.frame(Predictor = bas_glm_fit$namesx[-1],
-                      PIP = as.numeric(bas_glm_fit$probne0[-1])) %>%
-  arrange(desc(PIP))
-print(pip_df)
-
-saveRDS(bas_glm_fit, "data/bas_glm_fit.rds")
+```{r fit-lin, cache=TRUE}
+set.seed(123)
+fit_lin <- bas.lm(y ~ ., data = df_bas, prior = "BIC", modelprior = uniform(),
+                   method = "MCMC", MCMC.iterations = 50000)
+pred_lin <- predict(fit_lin, estimator = "BMA")$fit
 ```
 
-`bas.glm` gives a posterior inclusion probability $P(\beta_j \neq 0 \mid y)$
-for each predictor, a philosophically different quantity from the
-horseshoe's continuous shrinkage weight $\kappa_j$ (discrete stochastic model
-search and averaging, versus continuous adaptive shrinkage), but one that
-answers the same substantive question.
-
-## Horseshoe vs BAS: do two independent methods agree?
-
-```{r hs-bas-comparison}
-samples_hs <- readRDS("data/samples_hs.rds")
-samp_mat   <- as.matrix(samples_hs)
-lambda_mat <- samp_mat[, grep("^lambda\\[", colnames(samp_mat))]
-kappa_mat  <- 1 / (1 + lambda_mat^2)
-hs_names <- colnames(model.matrix(as.formula(paste("~", rhs)), data = train))[-1]
-kappa_df <- data.frame(Predictor = hs_names, Kappa = colMeans(kappa_mat))
-
-compare_df <- inner_join(pip_df, kappa_df, by = "Predictor") %>%
-  mutate(HS_signal = 1 - Kappa)   # stessa scala/direzione della PIP: 1 = segnale forte
-
-stopifnot(nrow(compare_df) == length(hs_names))  # tutti i 22 predittori devono matchare
-
-p_agreement <- ggplot(compare_df, aes(x = HS_signal, y = PIP, label = Predictor)) +
-  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "grey60") +
-  geom_vline(xintercept = 0.5, linetype = "dotted", color = "grey80") +
-  geom_hline(yintercept = 0.5, linetype = "dotted", color = "grey80") +
-  geom_point(size = 2.8, color = "#1D9E75") +
-  geom_text_repel(size = 3.1, max.overlaps = Inf, force = 3, force_pull = 0.3,
-                   box.padding = 0.7, point.padding = 0.2,
-                   min.segment.length = 0, seed = 42) +
-  coord_equal(xlim = c(-0.05, 1.18), ylim = c(-0.05, 1.18)) +
-  labs(title = "Horseshoe vs BAS: do two independent methods agree?",
-       x = expression("Horseshoe signal strength " * (1 - kappa[j])),
-       y = "BAS posterior inclusion probability") +
-  theme_minimal()
-
-ggsave("figs/horseshoe_vs_bas.png", p_agreement, width = 9, height = 8.5, dpi = 150)
-p_agreement
+```{r lin-plot, fig.width=6, fig.height=3.5}
+data.frame(pred = pred_lin) %>%
+  ggplot(aes(pred)) +
+  geom_histogram(bins = 40, fill = "#D85A30", alpha = 0.8) +
+  geom_vline(xintercept = c(0, 1), linetype = "dashed", color = "black") +
+  labs(title = "bas.lm treats satisfaction as Gaussian",
+       subtitle = sprintf("%.1f%% of fitted probabilities fall outside [0,1]",
+                           100 * mean(pred_lin < 0 | pred_lin > 1)),
+       x = "Predicted P(satisfied)", y = "Count") +
+  theme_minimal(base_size = 11)
 ```
 
-The two methods agree strongly overall (Spearman $\rho \approx 0.91$; 19 of
-22 predictors agree on direction), and agreement is near-perfect at the
-extremes: both flag customer type, business class, and entertainment as
-clear signal, and the arrival-delay residual, wifi, and gate location as
-clear noise. The main point of divergence is a cluster of seven
-service-related predictors (onboard service, check-in, time convenience,
-flight distance, seat comfort, age, online support) where BAS commits
-confidently to inclusion (PIP $> 0.87$) while the horseshoe remains genuinely
-uncertain ($\kappa_j \approx 0.4$–$0.6$). This reflects a real methodological
-difference rather than noise: BAS's discrete stochastic model search averages
-over binary in/out decisions and tends to polarise toward 0 or 1, whereas the
-horseshoe's continuous shrinkage can represent genuine uncertainty as an
-intermediate value. The only three direction disagreements (age, ease of
-booking, baggage handling) all sit within 0.1 of the 0.5 threshold on at
-least one side — borderline cases, not contradictions.
+`r sprintf("%.1f%%", 100*mean(pred_lin < 0 | pred_lin > 1))` of the
+in-sample fitted values fall outside `[0,1]` -- not a rounding curiosity,
+but the direct, visible consequence of using a likelihood that assumes
+constant variance and an unbounded response for what is actually a
+bounded 0/1 outcome. This is the concrete justification for Sections 02
+and 03, and for part (b) below.
 
-## Summary
+# (b) `bas.glm` with a binomial family
 
-`bas.lm` concretely justifies the Bernoulli-logit likelihood used throughout
-the project. `bas.glm` provides a genuinely independent cross-check of
-Section 3's variable-selection conclusions: two methodologically different
-approaches — continuous adaptive shrinkage and discrete stochastic model
-search agree strongly on which predictors matter, which is a stronger
-claim than either method could make alone.
+With `r ncol(X_full)+1` predictors, $2^{`r ncol(X_full)+1`} \approx$
+`r format(round(2^(ncol(X_full)+1)/1e6,1), big.mark=",")` million
+candidate models -- too many to enumerate exhaustively, so we use
+`method = "MCMC"` to stochastically search the model space, as flagged
+in Section 00's instability discussion.
 
+```{r fit-glm-g, cache=TRUE}
+set.seed(123)
+fit_glm_g <- bas.glm(y ~ ., data = df_bas, family = binomial(),
+                      betaprior = g.prior(nrow(df_bas)), modelprior = uniform(),
+                      method = "MCMC", MCMC.iterations = 100000)
+```
 
+```{r top-models}
+knitr::kable(round(summary(fit_glm_g, n.models = 5), 3),
+             caption = "Top 5 models by posterior probability (g-prior)")
+```
 
+The single best model
+(posterior probability `r sprintf("%.3f", max(fit_glm_g$postprobs))`)
+includes `Departure/Arrival time convenient`, `Inflight entertainment`,
+`Ease of Online booking`, `On-board service`, `Leg room service`,
+`Checkin service`, `Personal Travel` and `disloyal Customer` -- already
+visibly the same handful of variables the horseshoe in Section 03
+preserved.
 
+# Is the MCMC search actually stable?
+
+This is exactly the instability question flagged back in Section 00:
+with ~22 correlated candidate predictors, a stochastic search over
+$4.2$ million models could plausibly land on different answers between
+runs. We check this three ways rather than assuming it away.
+
+**Convergence within one run.** BAS reports two independent estimates of
+each posterior inclusion probability: one from renormalizing the
+sampled models' marginal likelihoods, one from raw MCMC visit
+frequency. If the chain has converged, they should agree closely.
+
+```{r diagnostics-plot, fig.width=5, fig.height=5}
+diag_df <- data.frame(renormalized = fit_glm_g$probne0.RN,
+                       mcmc = fit_glm_g$probne0.MCMC)
+ggplot(diag_df, aes(renormalized, mcmc)) +
+  geom_point(color = "#185FA5", alpha = 0.7) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "grey40") +
+  coord_equal(xlim = c(0,1), ylim = c(0,1)) +
+  labs(title = "MCMC convergence check: PIP estimates should lie on the diagonal",
+       x = "PIP (renormalized marginal likelihood)", y = "PIP (raw MCMC frequency)") +
+  theme_minimal(base_size = 11)
+```
+
+Correlation between the two estimates is
+`r sprintf("%.4f", cor(fit_glm_g$probne0.RN, fit_glm_g$probne0.MCMC))`,
+maximum absolute difference
+`r sprintf("%.3f", max(abs(fit_glm_g$probne0.RN - fit_glm_g$probne0.MCMC)))`
+-- the points sit essentially on the diagonal, the sign this run has
+converged.
+
+**Stability across seeds.** We refit the identical model twice more with
+different random seeds and compare posterior inclusion probabilities.
+
+```{r seed-stability, cache=TRUE}
+run_seed <- function(seed) {
+  set.seed(seed)
+  fit <- bas.glm(y ~ ., data = df_bas, family = binomial(),
+                 betaprior = g.prior(nrow(df_bas)), modelprior = uniform(),
+                 method = "MCMC", MCMC.iterations = 100000)
+  fit$probne0
+}
+pip_seed1 <- run_seed(1)
+pip_seed2 <- run_seed(2)
+
+pip_df <- data.frame(term = fit_glm_g$namesx,
+                      seed123 = fit_glm_g$probne0,
+                      seed1 = pip_seed1, seed2 = pip_seed2)
+pip_df$range <- apply(pip_df[, 2:4], 1, function(x) max(x) - min(x))
+```
+
+```{r seed-stability-table}
+knitr::kable(pip_df %>% arrange(desc(range)) %>% head(8), row.names = FALSE, digits = 3,
+             caption = "Largest PIP swings across 3 seeds (of 22 predictors)")
+cat(sprintf("Max PIP range across seeds: %.3f\nMean PIP range across seeds: %.4f\n",
+            max(pip_df$range), mean(pip_df$range)))
+```
+
+**BIC prior as a robustness check.** A different prior on the regression
+coefficients is a different, non-nested check on the same question.
+
+```{r bic-prior, cache=TRUE}
+set.seed(123)
+fit_glm_bic <- bas.glm(y ~ ., data = df_bas, family = binomial(),
+                        betaprior = bic.prior(nrow(df_bas)), modelprior = uniform(),
+                        method = "MCMC", MCMC.iterations = 100000)
+
+cmp_prior <- data.frame(term = fit_glm_g$namesx, g_prior = round(fit_glm_g$probne0, 3),
+                         BIC = round(fit_glm_bic$probne0, 3))
+cmp_prior$abs_diff <- round(abs(cmp_prior$g_prior - cmp_prior$BIC), 3)
+```
+
+```{r bic-table}
+knitr::kable(cmp_prior %>% arrange(desc(abs_diff)) %>% head(6), row.names = FALSE,
+             caption = "Largest g-prior vs. BIC-prior PIP differences")
+cat("Max |g-prior - BIC| difference:", max(cmp_prior$abs_diff), "\n")
+```
+
+With 100,000 MCMC iterations, PIPs move by at most
+`r sprintf("%.3f", max(pip_df$range))` across three different seeds and
+by at most `r sprintf("%.3f", max(cmp_prior$abs_diff))` between the
+g-prior and the BIC-based prior. **This directly answers Section 00's
+instability question**: the "instability" earlier runs might show is a
+symptom of too few MCMC iterations relative to a large, correlated model
+space -- not an inherent flaw of the g-prior or of BAS. With an adequate
+iteration budget the search is, in practice, stable.
+
+# BAS vs. the horseshoe: do two independent methods agree?
+
+```{r hs-comparison}
+hs <- readRDS("horseshoe_summary.rds")
+hs_names_raw <- c("Seat.comfort", "Departure.Arrival.time.convenient", "Food.and.drink",
+                   "Gate.location", "Inflight.wifi.service", "Inflight.entertainment",
+                   "Online.support", "Ease.of.Online.booking", "On.board.service",
+                   "Leg.room.service", "Baggage.handling", "Checkin.service",
+                   "Cleanliness", "Online.boarding", "Age_std", "FlightDist_std",
+                   "Class_EcoPlus", "Class_Business", "logDepDelay_std",
+                   "TypeTravel_Personal", "CustType_disloyal", "ArrivalDelay_resid")
+kappa_ordered <- hs$post_kappa[c(paste0("beta[", 1:21, "]"), "beta_arr")]
+
+cmp_methods <- data.frame(term = hs_names_raw,
+                           PIP = round(fit_glm_g$probne0[-1], 3),
+                           kappa = round(kappa_ordered, 3))
+cmp_methods$signal_BAS <- cmp_methods$PIP > 0.5
+cmp_methods$signal_HS  <- cmp_methods$kappa < 0.5
+cmp_methods$agree <- cmp_methods$signal_BAS == cmp_methods$signal_HS
+agreement_rate <- mean(cmp_methods$agree)
+```
+
+```{r hs-comparison-plot, fig.width=7, fig.height=6}
+cmp_methods %>%
+  mutate(term = factor(term, levels = term[order(PIP)])) %>%
+  ggplot(aes(x = PIP, y = 1 - kappa, color = agree)) +
+  geom_point(size = 2.5) +
+  geom_hline(yintercept = 0.5, linetype = "dashed", color = "grey60") +
+  geom_vline(xintercept = 0.5, linetype = "dashed", color = "grey60") +
+  scale_color_manual(values = c("TRUE" = "#3B6D11", "FALSE" = "#D85A30"),
+                      labels = c("TRUE" = "Agree", "FALSE" = "Disagree"), name = NULL) +
+  labs(title = "BAS posterior inclusion probability vs. horseshoe (1 - kappa)",
+       subtitle = sprintf("%.0f%% agreement on signal (>0.5) vs. noise (<=0.5)", 100*agreement_rate),
+       x = "PIP (BAS, g-prior)", y = expression(1 - kappa[j]~"(horseshoe)")) +
+  theme_minimal(base_size = 10)
+```
+
+`r sprintf("%.0f%%", 100*agreement_rate)` of the 22 predictors get the
+same signal/noise call from BAS's model-space search and from the
+horseshoe's continuous shrinkage -- two structurally different
+estimation strategies (discrete model averaging vs. a single shrinkage
+prior) landing on the same handful of variables. The one disagreement,
+`Class: Business` (PIP `r cmp_methods$PIP[cmp_methods$term=="Class_Business"]`,
+$\kappa=$ `r cmp_methods$kappa[cmp_methods$term=="Class_Business"]`), is a
+genuine borderline case in *both* methods (BAS just below its 0.5 cutoff,
+the horseshoe's credible interval for it crossing zero in Section 03) --
+not a real contradiction between them.
+
+# Export for later sections
+
+Saved for reuse in Section 06: the fitted `bas.glm` object itself (BAS's
+`predict()` method supports genuine BMA prediction on new data, so no
+separate coefficient-draw export is needed the way JAGS required). The
+covariate construction here is identical to Section 03's, so the same
+training-set standardization parameters already saved in
+`section03_loo.rds` apply -- no need to duplicate them.
+
+```{r export-bas}
+saveRDS(fit_glm_g, "section04_basfit.rds")
+```

@@ -3,3 +3,18 @@
 .RData
 .Ruserdata
 codex/
+.RDataTmp
+.DS_Store
+
+# Knitted output — regenerate by knitting the .Rmd, don't commit
+*.html
+*_files/
+*.knit.md
+*.utf8.md
+fits/
+*_cache/
+
+# report build intermediates (keep report.pdf itself)
+report/report_files/
+report/*.tex
+report/*.knit.md
