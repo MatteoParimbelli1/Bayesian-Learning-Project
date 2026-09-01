@@ -38,7 +38,7 @@ raw <- raw %>%
   mutate(
     satisfaction   = factor(satisfaction, levels = c("dissatisfied", "satisfied")),
     # even if for this variables their factor won't be relevant during prediction,  is still useful for data exploration
-    Class          = factor(Class, levels = c("Eco", "Eco Plus", "Business"), ordered = TRUE),
+    Class          = factor(Class, levels = c("Eco", "Eco Plus", "Business")),
     Customer.Type  = factor(Customer.Type),
     Type.of.Travel = factor(Type.of.Travel)
   )
@@ -60,17 +60,9 @@ names(raw) <- new_names
 dim(raw)
 ```
 
-## 1. Dataset exploration
-
-Explore general dataset properties.
+In order to avoid later problems, we immediately check for missing values:
 
 ```{r}
-# general info
-str(raw)
-
-# check for duplicated rows
-cat("Duplicated rows:", sum(duplicated(raw)), "\n")
-
 # find and locate missing values
 na_counts <- colSums(is.na(raw))
 na_counts[na_counts > 0]
@@ -85,10 +77,22 @@ raw$row_id <- seq_len(nrow(raw))
 nrow(raw)
 ```
 
+## 1. Dataset exploration
+
+Explore general dataset properties.
+
+```{r}
+# general info
+str(raw)
+
+# check for duplicated rows
+cat("Duplicated rows:", sum(duplicated(raw)), "\n")
+```
+
 Now we check variable domain, especially whether all service-quality items lay within the range 0-5.
 
 ```{r}
-col_filter = c("age", "flight_distance", "seat_comfort", "time_convenient", "food_drink", "gate_location", "wifi", "entertainment", "online_support", "ease_booking", "onboard_service", "legroom", "baggage", "checkin", "cleanliness", "online_boarding", "dep_delay", "arr_delay")
+col_filter = c("age", "flight_distance", "seat_comfort", "time_convenient", "food_drink", "gate_location", "wifi", "entertainment", "online_support", "ease_booking", "onboard_service", "legroom", "baggage", "checkin", "cleanliness", "online_boarding", "dep_delay")
 
 sapply(raw[col_filter], range)
 ```
@@ -100,7 +104,7 @@ All quality service variables range over 0-5. The remaining numeric variables al
 ```{r}
 # check and lot target class balance
 
-pal <- c(dissatisfied = "#eb6834", satisfied = "#2a78d6")
+pal <- c(dissatisfied = "#eb6834", satisfied = "#2a78d0")
 
 bal <- raw %>%
   count(satisfaction) %>%
@@ -114,7 +118,6 @@ ggplot(bal, aes(satisfaction, n, fill = satisfaction)) +
   scale_fill_manual(values = pal) +
   scale_y_continuous(expand = expansion(mult = c(0, 0.18))) +
   labs(title = "Class balance of the target variable",
-       subtitle = sprintf("Training subsample, n = %d", nrow(train)),
        x = NULL, y = "customers") +
   theme_minimal(base_size = 12) +
   theme(panel.grid.major.x = element_blank(), panel.grid.minor = element_blank())
@@ -147,7 +150,7 @@ num.raw %>%
 
 ### 1.2.1 Quality of Service indicators by satisfaction
 
-```{r}
+```{r fig.width=14, fig.height=14}
 qs_vars <- c("seat_comfort", "time_convenient", "food_drink", "gate_location", "wifi", "entertainment", "online_support", "ease_booking", "onboard_service", "legroom", "baggage", "checkin", "cleanliness", "online_boarding")
 
 raw %>%
@@ -169,21 +172,22 @@ The customer satisfaction per item follows the same pattern expressed by the cor
 
 ### 1.3 Full correlation heatmap
 
-```{r fig.width=12, fig.height=10}
+```{r fig.width=16, fig.height=16}
 
 corr_mat = cor(num.raw[, !names(num.raw) == "row_id"])
+
 corrplot(corr_mat, method = "color", type = "upper", order = "hclust",
          col = colorRampPalette(rev(brewer.pal(9, "RdBu")))(200),
          tl.col = "black", tl.srt = 45, tl.cex = 0.75,
          addCoef.col = "black", number.cex = 0.55,
          diag = FALSE,
-         title = "Correlation matrix of the 14 service-quality items\n(hierarchical clustering order)",
+         title = "Correlation matrix of all original and augmented covariates",
          mar = c(0, 0, 2, 0))
 ```
 
 ### 1.3.1 Quality service correlation
 
-```{r fig.width=12, fig.height=10}
+```{r fig.width=14, fig.height=14}
 # focus on the correlation between Quality of Service variables
 
 # re-defining them for clarity
@@ -259,7 +263,7 @@ n_flagged
 
 ## 2. Data augmentation
 
-In the following section we modify our dataset.
+Before any exploration we show some changes we've done to the dataset, avoiding to show irrelevant information.
 
 ### 2.1 Decorrelating Departure and Arrival delay
 
@@ -280,19 +284,63 @@ We tought about two solutions:
 # exploring the 
 
 delay_fit <- lm(arr_delay ~ dep_delay, data = raw)
-
-raw$arr_delay_res <- NA_real_
-raw$arr_delay_res[!is.na(raw$arr_delay_res)] <- residuals(delay_fit)
+raw$arr_delay_res <- residuals(delay_fit)
 
 check_cor <- cor(raw$dep_delay, raw$arr_delay, use = "complete.obs")
 ```
 
 The fitted relationship is Arrival $\approx$ `r sprintf("%.2f", coef(delay_fit)[1])` $+$ `r sprintf("%.3f", coef(delay_fit)[2])` $\times$ Departure (R$^2$ = `r sprintf("%.3f", summary(delay_fit)$r.squared)`).
 
-Given that the slope is almost one and the intercept is just `coef(delay_fit)[1]` minutes, we opted for the simple difference as solution, given the simplicity and higher interpretability.
+Given that the slope is almost one and the intercept is just `r`coef(delay_fit)[1]\` minutes, we opted for the simple difference as solution, given the simplicity and higher interpretability.
 
 ```{r}
 raw$midfly_delay <- raw$arr_delay - raw$dep_delay
+```
+
+### 2.1 Adjust for skewnees
+
+From the boxplots we can see that covariates `flight distance`, `departure delay' and`midfly delay\` are skew. So we apply a log-transformation and we check the results to verify if the transformation is worthy or not.
+
+```{r skew-check}
+skew <- function(x) { x <- x[!is.na(x)]; m <- mean(x); s <- sd(x); mean(((x - m) / s)^3) }
+
+signedLogArr <- sign(raw$midfly_delay) * log1p(abs(raw$midfly_delay))
+
+skew_tbl <- data.frame(
+  variable = c("Flight Distance", "log1p(Flight Distance)",
+               "Departure Delay", "log1p(Departure Delay)",
+               "Midflight Delay", "signed-log(Midflight delay)"
+               ),
+  skewness = round(c(
+    skew(raw$flight_distance), skew(log1p(raw$flight_distance)), 
+    skew(raw$dep_delay), skew(log1p(raw$dep_delay)),
+    skew(raw$midfly_delay), skew(signedLogArr)
+    ), 3)
+)
+knitr::kable(skew_tbl)
+```
+
+Flight Distance is only mildly skewed (`r`skew(raw$flight_distance)`) and a log transform overcorrects it into a left skew (`r `skew(log1p(raw$flight_distance`) -- so we keep it on the raw scale. The two delay variables are genuinely skewed (`r `skew(raw$dep_delay)` and `r`skew(raw\$midfly_delay)\`) and both transforms clearly help: log(1+x) for Departure Delay (non-negative), and a signed log, $\text{sign}(x)\log(1+|x|)$, for the delay residual, which can be negative.
+
+```{r}
+raw$log_mid_delay <- signedLogArr
+raw$log_dep_delay <- log1p(raw$dep_delay)
+```
+
+### 2.3 Final correlation matrix
+
+```{r fig.width=16, fig.height=16}
+
+new_corr_mat = cor(num.raw[, !names(num.raw) == "row_id"])
+# arr_delay_res is excluded due problems during the plotting
+
+corrplot(new_corr_mat, method = "color", type = "upper", order = "hclust",
+         col = colorRampPalette(rev(brewer.pal(9, "RdBu")))(200),
+         tl.col = "black", tl.srt = 45, tl.cex = 0.75,
+         addCoef.col = "black", number.cex = 0.55,
+         diag = FALSE,
+         title = "Correlation matrix of all original and augmented covariates",
+         mar = c(0, 0, 2, 0))
 ```
 
 ## 3. Data stratification, split and storage
@@ -303,8 +351,10 @@ In the remaining part we stratify the dataset for the model, we split it and we 
 
 The brief describes a curated 1,000-row file; we have the full `r format(n_total, big.mark = ",")`-row source. We draw a stratified training subsample of $n \approx 1{,}200$, and we stratify it to reflect categorical variable classes proportions.
 
-```{r}
+```{r fig.width=14, fig.height=14}
+
 cat_vars <- c("satisfaction", "customer_type", "travel_type", "cabin_class")
+
 lapply(raw[cat_vars], function(x) round(prop.table(table(x)), 3))
 ```
 
@@ -333,10 +383,10 @@ cat("Satisfaction proportions (full data vs. training subsample):\n")
 print(compare_tbl("satisfaction"))
 
 cat("\nClass proportions (full data vs. training subsample):\n")
-print(compare_tbl("Class"))
+print(compare_tbl("cabin_class"))
 
 cat("\nCustomer Type proportions (full data vs. training subsample):\n")
-print(compare_tbl("Customer.Type"))
+print(compare_tbl("customer_type"))
 ```
 
 ### 3.2 Dataset storage

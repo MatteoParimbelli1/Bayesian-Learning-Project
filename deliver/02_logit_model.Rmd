@@ -1,0 +1,293 @@
+---
+title: "02_logit_model"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE,
+                      fig.align = "center", cache = FALSE)
+
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(rjags)
+library(coda)
+library(loo)
+library(bayesplot)
+
+rm(list = ls())
+```
+
+In this notebook we are going to fit a logit model for the customer satisfaction prediction.
+
+```{r load-data}
+train <- read.csv("../data/airline_train_n1200.csv", stringsAsFactors = FALSE)
+train$y <- as.integer(train$satisfaction == "satisfied")
+n_train <- nrow(train)
+```
+
+## 0. Covariate preparation
+
+We start by fitting the model on the suggested covariates (or their transformation):`age`, `seat_comfort`, `flight_distace`, `cabin_class`, `log_dep_delay` and `log_mid_delay`.
+
+```{r}
+# helper function to standardize covariates and make them numeric
+std <- function(x) as.numeric(scale(x))
+
+logdep_std      <- std(train$log_dep_delay)
+Age_std         <- std(train$age)
+Seat_std        <- std(train$seat_comfort)
+FlightDist_std  <- std(train$flight_distance)
+TypeTravel_Personal <- as.integer(train$travel_type == "Personal Travel")
+CustType_disloyal   <- as.integer(train$customer_type == "disloyal Customer")
+
+logmid_delay    <- std(train$log_mid_delay)
+
+Class_EcoPlus   <- as.integer(train$cabin_class == "Eco Plus")
+Class_Business  <- as.integer(train$cabin_class == "Business")
+Class_score_std <- std(as.integer(factor(train$cabin_class, levels = c("Eco", "Eco Plus", "Business"), ordered = TRUE)))
+
+
+X_dummy <- cbind(Age_std, Seat_std, FlightDist_std, Class_EcoPlus, Class_Business,
+                 logdep_std, TypeTravel_Personal, CustType_disloyal)
+
+X_ordinal <- cbind(Age_std, Seat_std, FlightDist_std, Class_score_std,
+                   logdep_std, TypeTravel_Personal, CustType_disloyal)
+
+```
+
+`Class` is fit two ways for comparison below: two dummies (`Eco Plus`, `Business`, reference = `Eco`) versus a single centred ordinal score (1/2/3). Reference levels for the binary covariates are the majority group in each case: `Business travel` and `Loyal Customer`.
+
+## 1. Model specification
+
+$$y_i \mid p_i \sim \text{Bernoulli}(p_i), \qquad
+\text{logit}(p_i) = \beta_0 + x_i\beta + \beta_{\text{midflight}}\, \text{midflight\_delay}_i,
+\qquad \beta_0, \beta_j, \beta_{\text{arr}} \sim \mathscr{N}(0, 100).$$
+
+The mid-flight delay is kept outside the main design matrix and given its own coefficient together with an explicit sampling statement `arr_delay[i] ~ dnorm(0, 1)` for **every** row.
+
+```{r model-code}
+model_string = 'model {
+  for (i in 1:n) {
+    y[i] ~ dbern(p[i])
+    logit(p[i]) <- beta0 + inprod(X[i,], beta) + beta_arr * arr_delay[i]
+    log_lik[i] <- logdensity.bern(y[i], p[i])
+    arr_delay[i] ~ dnorm(0, 1)
+  }
+  beta0 ~ dnorm(0, 0.01)
+  beta_arr ~ dnorm(0, 0.01)
+  for (j in 1:P) { beta[j] ~ dnorm(0, 0.01) }
+}'
+```
+
+```{r fit-function}
+
+n_chains  = 3
+n_adapt   = 1500
+burn_in   = 1000
+iter      = 3000
+thinning  = 7
+
+fit_model <- function(model_string, X, arr_delay,
+                      n.chains = n_chains, 
+                      n.adapt = n_adapt, 
+                      burn = burn_in, 
+                      n.iter = iter, 
+                      thin = thinning) 
+  {
+    dataList <- list(
+      y = train$y, 
+      X = X, 
+      arr_delay = arr_delay, 
+      n = nrow(X), 
+      P = ncol(X)
+      )
+    
+    m <- jags.model(textConnection(model_string), data = dataList,
+                    n.chains = n.chains, n.adapt = n.adapt, quiet = TRUE)
+    update(m, burn)
+    coda.samples(m, variable.names = c("beta0", "beta", "beta_arr", "log_lik"),
+                 n.iter = n.iter, thin = thin)
+  }
+  
+  extract_loglik <- function(samples) {
+    sm <- as.matrix(samples)
+    sm[, grepl("^log_lik", colnames(sm))]
+  }
+
+```
+
+### 1.1 cabin_class encoding
+
+Before actually evaluating the model, we focus on a small question: is it better to encode the `cabin_class` as dummy variable or as ordered one?
+
+```{r fit-encoding, cache=TRUE}
+set.seed(123)
+
+fit_dummy_logit   <- fit_model(model_string, X_dummy,   logmid_delay)
+fit_ordinal_logit <- fit_model(model_string, X_ordinal, logmid_delay)
+
+w_dummy   <- waic(extract_loglik(fit_dummy_logit))
+w_ordinal <- waic(extract_loglik(fit_ordinal_logit))
+cmp_encoding <- loo_compare(list(dummy = w_dummy, ordinal = w_ordinal))
+```
+
+```{r encoding-waic-print}
+cat("Dummy encoding:\n");   print(w_dummy)
+cat("\nOrdinal encoding:\n"); print(w_ordinal)
+cat("\nComparison (positive elpd_diff favors the row):\n"); print(cmp_encoding)
+```
+
+The dummy encoding has the lower WAIC (`r sprintf("%.1f", w_dummy$estimates["waic","Estimate"])` vs `r sprintf("%.1f", w_ordinal$estimates["waic","Estimate"])`), though by less than 2 standard errors of the difference -- a real but modest preference, not an overwhelming one. Given `Class` is nominal rather than genuinely equally-spaced ordinal, and the dummy encoding is both the more flexible specification and the one that will let us report a separate, directly interpretable odds ratio per class, we adopt it going forward.
+
+## 2. MCMC diagnostic
+
+```{r diagnostics}
+final_fit <- fit_dummy_logit
+
+beta_cols <- colnames(as.matrix(final_fit))[!grepl("^log_lik", colnames(as.matrix(final_fit)))]
+
+gd  <- gelman.diag(final_fit[, beta_cols])
+gd
+
+diag_df <- data.frame( 
+  ESS = effectiveSize(final_fit[, beta_cols])
+)
+knitr::kable(diag_df)
+```
+
+```{r fig.width=20, fig.height=12}
+
+mcmc_trace(final_fit[, beta_cols]) +
+theme_minimal(base_size = 11) +
+  theme(
+    strip.text = element_text(size = 16, face = "bold"),
+    axis.text.y = element_text(size = 14),
+    panel.grid.major.x = element_line(color = "grey85", linewidth = 0.3)
+  ) +
+  vline_0(color = "grey40", linetype = "dashed")
+```
+
+```{r fig.width=20, fig.height=12}
+for(i in 1:n_chains){
+  print(
+    mcmc_acf(final_fit[[i]][, beta_cols]) +    
+      theme_minimal(base_size = 11) +
+      theme(
+        strip.text = element_text(size = 16, face = "bold"),
+        axis.text.y = element_text(size = 14),
+        panel.grid.major.x = element_line(color = "grey85", linewidth = 0.3)
+      ) +
+      vline_0(color = "grey40", linetype = "dashed")
+  )
+}
+```
+
+## 3. MCMC results
+
+```{r fig.width=20, fig.height=12}
+groups <- list(
+  continuous = c("beta[1]", "beta[2]", "beta[3]", "beta[6]", "beta_arr"),
+  class      = c("beta[4]", "beta[5]"),
+  binary     = c("beta[7]", "beta[8]", "beta0")
+)
+
+for (g in groups) {
+  print(
+    mcmc_areas(final_fit[, g], prob = 0.98) +
+    theme_minimal(base_size = 11) +
+      theme(
+        axis.text.y = element_text(size = 24),
+        axis.text.x = element_text(size = 24),
+        panel.grid.major.x = element_line(color = "grey85", linewidth = 0.3)
+      ) +
+    vline_0(color = "grey40", linetype = "dashed")
+        )
+}
+```
+
+```{r odds-ratios}
+sm <- as.matrix(final_fit)
+sm_beta <- sm[, beta_cols]
+
+term_labels <- c(
+  "beta0" = "Intercept",
+  "beta[1]" = "Age",
+  "beta[2]" = "Seat comfort",
+  "beta[3]" = "Flight Distance",
+  "beta[4]" = "Class: Eco Plus (vs Eco)",
+  "beta[5]" = "Class: Business (vs Eco)",
+  "beta[6]" = "log(1+Departure Delay)",
+  "beta[7]" = "Personal Travel (vs Business travel)",
+  "beta[8]" = "disloyal Customer (vs Loyal)",
+  "beta_arr" = "Arrival delay residual (signed-log)"
+)
+
+post_mean <- colMeans(sm_beta)
+post_ci   <- apply(sm_beta, 2, quantile, c(0.025, 0.975))
+
+or_tbl <- data.frame(
+  term = term_labels[names(post_mean)],
+  beta_mean = round(post_mean, 3),
+  beta_lo = round(post_ci[1, ], 3), beta_hi = round(post_ci[2, ], 3),
+  OR = round(exp(post_mean), 3),
+  OR_lo = round(exp(post_ci[1, ]), 3), OR_hi = round(exp(post_ci[2, ]), 3)
+) %>% arrange(desc(OR))
+
+knitr::kable(or_tbl, row.names = FALSE)
+```
+
+```{r or-plot, fig.width=7, fig.height=4.5}
+or_tbl %>%
+  filter(term != "Intercept") %>%
+  mutate(term = factor(term, levels = term[order(OR)]),
+         significant = OR_lo > 1 | OR_hi < 1) %>%
+  ggplot(aes(x = OR, y = term, color = significant)) +
+  geom_vline(xintercept = 1, linetype = "dashed", color = "grey40") +
+  geom_errorbarh(aes(xmin = OR_lo, xmax = OR_hi), height = 0.2) +
+  geom_point(size = 2.5) +
+  scale_color_manual(values = c("TRUE" = "#185FA5", "FALSE" = "grey60"), guide = "none") +
+  scale_x_log10() +
+  labs(title = "Posterior odds ratios, logit model with dummy Class encoding",
+       subtitle = "95% credible intervals; dashed line = no effect",
+       x = "Odds ratio (log scale)", y = NULL) +
+  theme_minimal(base_size = 11)
+```
+
+## 4. Interpretation
+
+`Business` class carries by far the largest effect (OR $\approx$ `r or_tbl$OR[or_tbl$term == "Class: Business (vs Eco)"]`, 95% CI [`r or_tbl$OR_lo[or_tbl$term == "Class: Business (vs Eco)"]`, `r or_tbl$OR_hi[or_tbl$term == "Class: Business (vs Eco)"]`]), confirming the Section 01 subgroup contrast even after adjusting for everything else. `disloyal Customer` shows a strong *negative* effect (OR $\approx$ `r or_tbl$OR[or_tbl$term == "disloyal Customer (vs Loyal)"]`), also consistent with Section 01. `Seat comfort` is the strongest continuous driver.
+
+The interesting reversal is `Type of Travel`: Section 01 found an essentially certain marginal association (personal-travel customers looked less satisfied), but here, once `Class` and the other covariates are held fixed, its 95% credible interval for `Personal Travel` (`r or_tbl$OR_lo[or_tbl$term == "Personal Travel (vs Business travel)"]` to `r or_tbl$OR_hi[or_tbl$term == "Personal Travel (vs Business travel)"]`) comes close to, but does not quite exclude, 1. This is exactly the confounding flagged at the end of Section 01: business travellers are disproportionately booked in Business class, and once class is in the model directly, most of the apparent travel-type effect is explained away. `Flight Distance` and `Departure Delay` point in an intuitive direction but their credible intervals are wide enough that we would not call either one a confident driver on its own -- Section 03's shrinkage model, with the full battery of 14 service ratings added, will help clarify which of these borderline effects survive alongside the stronger correlated service signals.
+
+## 5. Result export
+
+Export results for later usage.
+
+```{r export}
+
+final_loglik <- extract_loglik(final_fit)
+loo_final <- loo::loo(final_loglik)
+waic_final <- loo::waic(final_loglik)
+
+sm_final <- as.matrix(final_fit)
+beta_draws <- sm_final[, beta_cols]
+
+standardization <- list(
+  Age_mean = mean(train$age), Age_sd = sd(train$age),
+  Seat_mean = mean(train$seat_comfort), Seat_sd = sd(train$seat_comfort),
+  FlightDist_mean = mean(train$flight_distance), FlightDist_sd = sd(train$flight_distance),
+  logdep_mean = mean(train$log_dep_delay), logDepDelay_sd = sd(train$log_dep_delay),
+  logmid_mean = mean(train$log_mid_delay), logmid_sd = sd(train$log_mid_delay)
+)
+
+saveRDS(list(
+  loo = loo_final, 
+  waic = waic_final,
+  beta_mean = post_mean, 
+  beta_ci = post_ci, 
+  or_tbl = or_tbl,
+  beta_draws = beta_draws, 
+  standardization = standardization
+), "../data/02_logit_mcmc.rds")
+```
