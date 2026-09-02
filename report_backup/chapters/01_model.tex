@@ -1,0 +1,14 @@
+\section{Model specification}
+Let $y_i$ denote the satisfaction level of customer $i$. We assume that
+$$
+y_i \sim\ \textbf{Bernoulli}(p)
+$$
+where $p$ is the probability that a customer is satisfied.
+We model the probability $p$ as a function of the covariates $X$ as
+$$
+\text{logit}(p)=\ln\left(\cfrac{p}{1-p}\right) = \beta_0+X\beta
+$$
+where $\beta_0$ is the intercept in the logit space and $\beta$ is the vector of regression coefficients of the covariates $X$ (after the introduction of midflight dely the deletion of arrival delay).
+\newline
+Later in the project we will carry out the analysis by using several models, and for each one of them we'll describe the structure of the prior we decide to use for the regression coefficients.
+

@@ -1,0 +1,102 @@
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{polistyle}[2026/06/22 v1.0 PoliMi report style]
+
+%---------------- Fonts (Times-like serif) ----------------------------
+\RequirePackage[T1]{fontenc}
+\RequirePackage[utf8]{inputenc}
+\RequirePackage{mathptmx}                 % Times text + math
+\RequirePackage[scaled=0.9]{helvet}       % Helvetica for sans elements
+
+%---------------- Page geometry ---------------------------------------
+\RequirePackage[a4paper,top=2.2cm,bottom=2.2cm,left=1.8cm,right=1.8cm]{geometry}
+
+%---------------- Colours (from the slide deck) -----------------------
+\RequirePackage{xcolor}
+\definecolor{polinavy}{HTML}{022E55}   % primary deep navy
+\definecolor{poliblue}{HTML}{0460B4}   % bright accent blue
+\definecolor{polisteel}{HTML}{6DA4BA}  % steel-blue accent
+\definecolor{polirule}{HTML}{C9D6E0}   % light rule
+
+%---------------- Misc packages ---------------------------------------
+\RequirePackage{titlesec}
+\RequirePackage{abstract}
+\RequirePackage{fancyhdr}
+\RequirePackage{graphicx}
+\RequirePackage{booktabs}
+\RequirePackage{caption}
+\RequirePackage{enumitem}
+\RequirePackage{amsmath,amssymb}
+\RequirePackage{etoolbox}              % for \ifdefempty (logo test)
+\RequirePackage{lipsum}                % placeholder text only — drop for final
+\RequirePackage[colorlinks=true,linkcolor=polinavy,citecolor=poliblue,
+            urlcolor=poliblue]{hyperref}
+\RequirePackage[backend=biber]{biblatex}
+
+%---------------- Section heading styling -----------------------------
+\titleformat{\section}
+  {\normalfont\large\bfseries\color{polinavy}}
+  {\thesection.}{0.5em}{}
+\titleformat{\subsection}
+  {\normalfont\normalsize\bfseries\color{poliblue}}
+  {\thesubsection}{0.5em}{}
+\titlespacing*{\section}{0pt}{1.4ex plus .3ex}{0.9ex}
+\titlespacing*{\subsection}{0pt}{1.1ex plus .2ex}{0.6ex}
+
+%---------------- Caption styling -------------------------------------
+\captionsetup{font=small,labelfont={bf,color=polinavy},
+              labelsep=period,skip=5pt}
+
+%---------------- Abstract styling ------------------------------------
+\renewcommand{\abstractnamefont}{\normalfont\bfseries\color{polinavy}}
+\renewcommand{\abstracttextfont}{\normalfont\small\itshape}
+
+%---------------- Title metadata --------------------------------------
+% Set these in main.tex via \papertitle{...}, \papersubtitle{...}, etc.
+\newcommand{\@papertitle}{}
+\newcommand{\@papersubtitle}{}
+\newcommand{\@paperauthors}{}
+\newcommand{\@paperaffil}{}
+\newcommand{\@paperlogo}{}
+\newcommand{\papertitle}[1]{\gdef\@papertitle{#1}}
+\newcommand{\papersubtitle}[1]{\gdef\@papersubtitle{#1}}
+\newcommand{\paperauthors}[1]{\gdef\@paperauthors{#1}}
+\newcommand{\paperaffil}[1]{\gdef\@paperaffil{#1}}
+\newcommand{\paperlogo}[1]{\gdef\@paperlogo{#1}}   % path, e.g. img/polimi-logo.png
+
+% Logo width (fits within the page width).
+\newlength{\titlelogowidth}
+\setlength{\titlelogowidth}{6cm}
+\newcommand{\setlogowidth}[1]{\setlength{\titlelogowidth}{#1}}
+
+%---------------- Headers / footers -----------------------------------
+% The running header reuses \@papertitle, so the title is set only once.
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\headrule}{\hbox to\headwidth{\color{polisteel}%
+  \leaders\hrule height \headrulewidth\hfill}}
+\fancyhead[L]{\footnotesize\color{polinavy}\scshape\@papertitle}
+\fancyhead[R]{\footnotesize\color{polinavy}\thepage}
+
+%---------------- Title banner -----------------------------------
+% Use in the body: \maketitlebanner before the main content
+\newcommand{\maketitlebanner}{%
+  \begin{center}
+    \ifdefempty{\@paperlogo}{}{%
+      \includegraphics[width=\titlelogowidth]{\@paperlogo}\par
+      \vspace{1.4ex}%
+    }%
+    {\color{polinavy}\rule{\textwidth}{2.2pt}}\par\vspace{1.0ex}
+    {\Huge\bfseries\color{polinavy}\@papertitle\par}
+    \vspace{0.8ex}
+    {\large\itshape\color{poliblue}\@papersubtitle\par}
+    \vspace{0.6ex}
+    {\color{polinavy}\rule{\textwidth}{0.8pt}}\par\vspace{1.4ex}
+    {\normalsize\@paperauthors\par}
+    \vspace{0.3ex}
+    {\footnotesize\color{polinavy!80}\@paperaffil\par}
+    \vspace{1.6ex}
+  \end{center}%
+}
+
+\endinput
