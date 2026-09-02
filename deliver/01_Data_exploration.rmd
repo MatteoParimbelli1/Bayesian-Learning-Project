@@ -1,5 +1,5 @@
 ---
-title: "01 - Data exploration
+title: "01 - Data exploration"
 subtitle: "Airline Customer Satisfaction -- Bayesian Learning & Monte Carlo Simulations, 2026"
 output:
   html_document:
@@ -298,6 +298,16 @@ raw$midfly_delay <- raw$arr_delay - raw$dep_delay
 ```
 
 ### 2.1 Adjust for skewnees
+```{r}
+raw[, c("flight_distance", "dep_delay", "midfly_delay")] %>%
+  select(where(is.numeric)) %>%
+  pivot_longer(everything(), names_to = "variable", values_to = "value") %>%
+  ggplot(aes(x = variable, y = value, fill = variable)) +
+  geom_boxplot(show.legend = FALSE) +
+  facet_wrap(~ variable, scales = "free") +
+  scale_fill_viridis_d() +
+  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
+```
 
 From the boxplots we can see that covariates `flight distance`, `departure delay' and`midfly delay\` are skew. So we apply a log-transformation and we check the results to verify if the transformation is worthy or not.
 
@@ -320,7 +330,7 @@ skew_tbl <- data.frame(
 knitr::kable(skew_tbl)
 ```
 
-Flight Distance is only mildly skewed (`r`skew(raw$flight_distance)`) and a log transform overcorrects it into a left skew (`r `skew(log1p(raw$flight_distance`) -- so we keep it on the raw scale. The two delay variables are genuinely skewed (`r `skew(raw$dep_delay)` and `r`skew(raw\$midfly_delay)\`) and both transforms clearly help: log(1+x) for Departure Delay (non-negative), and a signed log, $\text{sign}(x)\log(1+|x|)$, for the delay residual, which can be negative.
+Flight Distance is only mildly skewed (`rskew(raw$flight_distance)`) and a log transform overcorrects it into a left skew (`r `skew(log1p(raw$flight_distance`) -- so we keep it on the raw scale. The two delay variables are genuinely skewed (`r `skew(raw$dep_delay)` and `r`skew(raw\$midfly_delay)\`) and both transforms clearly help: log(1+x) for Departure Delay (non-negative), and a signed log, $\text{sign}(x)\log(1+|x|)$, for the delay residual, which can be negative.
 
 ```{r}
 raw$log_mid_delay <- signedLogArr
@@ -349,7 +359,7 @@ In the remaining part we stratify the dataset for the model, we split it and we 
 
 ### 3.1 Data stratification and split
 
-The brief describes a curated 1,000-row file; we have the full `r format(n_total, big.mark = ",")`-row source. We draw a stratified training subsample of $n \approx 1{,}200$, and we stratify it to reflect categorical variable classes proportions.
+The brief describes a curated 1,000-row file; we have the full `r format(dim(raw)[1], big.mark = ",")`-row source. We draw a stratified training subsample of $n \approx 1{,}200$, and we stratify it to reflect categorical variable classes proportions.
 
 ```{r fig.width=14, fig.height=14}
 
