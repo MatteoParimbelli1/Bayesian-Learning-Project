@@ -1,0 +1,231 @@
+---
+title: "A01_BAS_comparison"
+output: html_document
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE,
+                       fig.align = "center", cache = FALSE)
+
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(BAS)
+
+rm(list = ls())
+```
+
+After fitting our feature selection horseshoe prior-based model, we'd
+like to compare it with BAS model in order to verify if the two methods
+agree on which covariates are more useful in explaining the target
+variable.
+
+## 0. Dataset load
+
+```{r load-data}
+train <- read.csv("../data/airline_train_n1200.csv", stringsAsFactors = FALSE)
+train$y <- as.integer(train$satisfaction == "satisfied")
+
+std <- function(x) as.numeric(scale(x))
+
+service_items <- c("seat_comfort", "time_convenient", "food_drink", "gate_location", "wifi", "entertainment", "online_support", "ease_booking", "onboard_service","legroom", "baggage", "checkin", "cleanliness", "online_boarding" )
+X_service <- apply(train[, service_items], 2, std)
+
+logdep_std      <- std(train$log_dep_delay)
+Age_std         <- std(train$age)
+FlightDist_std  <- std(train$flight_distance)
+logmid_delay    <- std(train$log_mid_delay)
+
+Class_EcoPlus  <- as.integer(train$cabin_class == "Eco Plus")
+Class_Business <- as.integer(train$cabin_class == "Business")
+TypeTravel_Personal <- as.integer(train$travel_type == "Personal Travel")
+CustType_disloyal   <- as.integer(train$customer_type == "disloyal Customer")
+
+X_extra <- cbind(Age_std, FlightDist_std, Class_EcoPlus, Class_Business,
+                 logdep_std, TypeTravel_Personal, CustType_disloyal, logmid_delay)
+X_full <- cbind(X_service, X_extra)
+
+df_bas <- data.frame(y = train$y, X_full)
+```
+
+# 1. `bas.glm` fit with a binomial family
+
+With `r ncol(X_full)+1` predictors, $2^{`r ncol(X_full)+1`} \approx$
+`r format(round(2^(ncol(X_full)+1)/1e6,1), big.mark=",")` million
+candidate models -- too many to enumerate exhaustively, so we use
+`method = "MCMC"` in BAS to stochastically search the model space. Later
+section will asses whether this search suffers from instability or not.
+
+```{r fit-glm-g}
+set.seed(123)
+fit_glm_g <- bas.glm(y ~ ., data = df_bas, family = binomial(),
+                      betaprior = g.prior(nrow(df_bas)), modelprior = uniform(),
+                      method = "MCMC", MCMC.iterations = 100000)
+```
+
+```{r top-models}
+knitr::kable(round(summary(fit_glm_g, n.models = 5), 3),
+                          caption = "Top 5 models by posterior probability (g-prior)")
+```
+
+# 2. Parameter space convergence
+
+Now we test the goodness of the MCMC search in the parameter space
+executed by BAS.
+
+### Convergence within one run.
+
+BAS reports two independent estimates of each posterior inclusion
+probability:
+
+- `probne0.RB` : takes the set of distinct model visited containing the
+  variable $j$, use their marginal likelihoods, renomalizes and sum the
+  mass of those models
+
+- `probne0.MCM`: it's just the raw fraction of iterations the chain
+  spent in some model containing variable $j$ If the chain has
+  converged, they should agree closely.
+
+```{r diagnostics-plot, fig.width=5, fig.height=5}
+diag_df <- data.frame(renormalized = fit_glm_g$probne0.RN,
+                       mcmc = fit_glm_g$probne0.MCMC)
+ggplot(diag_df, aes(renormalized, mcmc)) +
+  geom_point(color = "#185FA5", alpha = 0.7) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "grey40") +
+  coord_equal(xlim = c(0,1), ylim = c(0,1)) +
+  labs(title = "MCMC convergence check: PIP estimates should lie on the diagonal",
+       x = "PIP (renormalized marginal likelihood)", y = "PIP (raw MCMC frequency)") +
+  theme_minimal(base_size = 11)
+```
+
+Correlation between the two estimates is
+`r sprintf("%.4f", cor(fit_glm_g$probne0.RN, fit_glm_g$probne0.MCMC))`,
+maximum absolute difference
+`r sprintf("%.3f", max(abs(fit_glm_g$probne0.RN - fit_glm_g$probne0.MCMC)))`
+-- the points sit essentially on the diagonal, the sign this run has
+converged.
+
+### stability across seeds
+
+We refit the identical model twice more with different random seeds and
+compare posterior inclusion probabilities (PIP) to check whether they
+agree or not.
+
+```{r seed-stability, cache=TRUE}
+run_seed <- function(seed) {
+  set.seed(seed)
+  fit <- bas.glm(y ~ ., data = df_bas, family = binomial(),
+                 betaprior = g.prior(nrow(df_bas)), modelprior = uniform(),
+                 method = "MCMC", MCMC.iterations = 100000)
+  fit$probne0
+}
+pip_seed1 <- run_seed(1)
+pip_seed2 <- run_seed(2)
+
+pip_df <- data.frame(term = fit_glm_g$namesx,
+                      seed123 = fit_glm_g$probne0,
+                      seed1 = pip_seed1, seed2 = pip_seed2)
+pip_df$range <- apply(pip_df[, 2:4], 1, function(x) max(x) - min(x))
+```
+
+```{r seed-stability-table}
+knitr::kable(pip_df %>% arrange(desc(range)) %>% head(8), row.names = FALSE, digits = 3,
+             caption = "Largest PIP swings across 3 seeds (of 22 predictors)")
+cat(sprintf("Max PIP range across seeds: %.3f\nMean PIP range across seeds: %.4f\n",
+            max(pip_df$range), mean(pip_df$range)))
+```
+
+### BIC prior as a robustness check
+
+We try another prior on the beta coefficients since, if the search is
+stable, the effect of the prior should vanish if the number of
+iterations is high enough.
+
+```{r bic-prior, cache=TRUE}
+set.seed(123)
+fit_glm_bic <- bas.glm(y ~ ., data = df_bas, family = binomial(),
+                        betaprior = bic.prior(nrow(df_bas)), modelprior = uniform(),
+                        method = "MCMC", MCMC.iterations = 100000)
+
+cmp_prior <- data.frame(term = fit_glm_g$namesx, g_prior = round(fit_glm_g$probne0, 3),
+                         BIC = round(fit_glm_bic$probne0, 3))
+cmp_prior$abs_diff <- round(abs(cmp_prior$g_prior - cmp_prior$BIC), 3)
+```
+
+```{r bic-table}
+knitr::kable(cmp_prior %>% arrange(desc(abs_diff)) %>% head(6), row.names = FALSE,
+             caption = "Largest g-prior vs. BIC-prior PIP differences")
+cat("Max |g-prior - BIC| difference:", max(cmp_prior$abs_diff), "\n")
+```
+
+With 100,000 MCMC iterations, PIPs move by at most
+`r sprintf("%.3f", max(pip_df$range))` across three different seeds and
+by at most `r sprintf("%.3f", max(cmp_prior$abs_diff))` between the
+g-prior and the BIC-based prior. Given the number of MCMC iterations,
+the search prove itself to be stable.
+
+# 3. BAS vs Horseshoe: model comparison
+
+Finally we compare the models selected by the two approaches, check on
+which coefficient do they agree and on which they dont'.
+
+```{r}
+hs <- readRDS("../data/03_horseshoe_summary.rds")
+hs_names_raw <- c("seat_confort", "time_convenience", "food_drink",
+                   "gate_location", "wifi", "entertainment",
+                   "online_support", "ease_booking", "onboard_service",
+                   "legroom", "baggage", "checkin",
+                   "cleanliness", "online_boarding", "Age_std", "FlightDist_std",
+                   "Class_EcoPlus", "Class_Business", "logdep_std",
+                   "TypeTravel_Personal", "CustType_disloyal", "logmid_delay")
+kappa_ordered <- hs$post_kappa[c(paste0("beta[", 1:21, "]"), "beta_arr")]
+
+names(kappa_ordered)
+length(hs$post_kappa)
+
+cmp_methods <- data.frame(term = hs_names_raw,
+                           PIP = round(fit_glm_g$probne0[-1], 3),
+                           kappa = round(kappa_ordered, 3))
+cmp_methods$signal_BAS <- cmp_methods$PIP > 0.5
+cmp_methods$signal_HS  <- cmp_methods$kappa < 0.5
+cmp_methods$agree <- cmp_methods$signal_BAS == cmp_methods$signal_HS
+agreement_rate <- mean(cmp_methods$agree)
+print("two methods agreement rate is: ")
+agreement_rate
+```
+
+```{r hs-comparison-plot, fig.width=7, fig.height=6}
+cmp_methods %>%
+  mutate(term = factor(term, levels = term[order(PIP)])) %>%
+  ggplot(aes(x = PIP, y = 1 - kappa, color = agree)) +
+  geom_point(size = 2.5) +
+  geom_hline(yintercept = 0.5, linetype = "dashed", color = "grey60") +
+  geom_vline(xintercept = 0.5, linetype = "dashed", color = "grey60") +
+  scale_color_manual(values = c("TRUE" = "#3B6D11", "FALSE" = "#D85A30"),
+                      labels = c("TRUE" = "Agree", "FALSE" = "Disagree"), name = NULL) +
+  labs(title = "BAS posterior inclusion probability vs. horseshoe (1 - kappa)",
+       subtitle = sprintf("%.0f%% agreement on signal (>0.5) vs. noise (<=0.5)", 100*agreement_rate),
+       x = "PIP (BAS, g-prior)", y = expression(1 - kappa[j]~"(horseshoe)")) +
+  theme_minimal(base_size = 10)
+```
+
+`r sprintf("%.0f%%", 100*agreement_rate)` of the 22 predictors get the
+same signal/noise call from BAS's model-space search and from the
+horseshoe's continuous shrinkage -- two structurally different
+estimation strategies (discrete model averaging vs. a single shrinkage
+prior) landing on the same handful of variables. The one disagreement,
+`Class: Business` (PIP
+`r cmp_methods$PIP[cmp_methods$term=="Class_Business"]`, $\kappa=$
+`r cmp_methods$kappa[cmp_methods$term=="Class_Business"]`), is a genuine
+borderline case in *both* methods (BAS just below its 0.5 cutoff, the
+horseshoe's credible interval for it crossing zero in Section 03) -- not
+a real contradiction between them.
+
+## 4.Export results
+
+```{r export-bas}
+saveRDS(fit_glm_g, "../data/A01_BAS_model.rds")
+```

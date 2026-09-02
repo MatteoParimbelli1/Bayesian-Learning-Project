@@ -1,0 +1,252 @@
+---
+title: "04 - Prior Sensitivity and Structural Robustness"
+subtitle: "Airline Customer Satisfaction -- Bayesian Learning & Monte Carlo Simulations, 2026"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE,
+                      fig.align = "center", cache = FALSE)
+
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(here)
+
+rm(list = ls())
+```
+
+This notebook stress-tests the conclusions of Section 02 (vague-prior
+logit) and Section 03 (horseshoe) against the choices we made along the
+way. We ask three questions: does the vague model's posterior depend on
+the prior *variance* we picked? Does the horseshoe's signal/noise
+verdict depend on the *global scale* of its half-Cauchy prior? And does
+the counter-intuitive `Departure/Arrival time convenient` coefficient
+from Section 03 survive dropping the ambiguous structural-zero rows?
+
+All the following checks require heacy JAGS fits, so we decided to split
+those in separate script files (`prior_sweep.R`,
+`horseshoe_prior_sweep.R`, `structural_zero_refit.R`) to avoid excessive
+long cells in this notebook. Scripts are meant to be executed ocne and
+then re-use their stored output.
+
+```{r load-data}
+train <- read.csv("../data/airline_train_n1200.csv", stringsAsFactors = FALSE)
+train$y <- as.integer(train$satisfaction == "satisfied")
+std <- function(x) as.numeric(scale(x))
+```
+
+# 1. Logit model prior sensitivity
+
+We refit Section 02's model (vague priors, dummy `Class` encoding) four
+times, varying only the prior variance on every $\beta_j$:
+$\sigma^2_\beta \in \{1, 10, 100, 10000\}$. The fits are produced by
+`prior_sweep.R`.
+
+```{r vague-term-labels}
+# Coefficient order returned by the sweep: beta[1..8], beta0, beta_arr.
+term_labels_vague <- c("beta0" = "Intercept", "beta[1]" = "Age", "beta[2]" = "Seat comfort",
+                       "beta[3]" = "Flight Distance", "beta[4]" = "Class: Eco Plus",
+                       "beta[5]" = "Class: Business", "beta[6]" = "log(1+Departure Delay)",
+                       "beta[7]" = "Personal Travel", "beta[8]" = "disloyal Customer",
+                       "beta_arr" = "Mid-flight delay (signed-log)")
+```
+
+```{r prior-sweep-load}
+sweep_results <- readRDS("../data/sensitivity/prior_sweep_results.rds")
+```
+
+```{r prior-sweep-plot, fig.width=8, fig.height=6}
+sweep_df <- bind_rows(lapply(names(sweep_results), function(v) {
+  df <- sweep_results[[v]]
+  df$term <- rownames(df)
+  df$variance <- v
+  df
+}))
+sweep_df$term_label <- term_labels_vague[sweep_df$term]
+sweep_df$variance <- factor(sweep_df$variance,
+                            levels = c("1", "10", "100", "10000"))
+
+ggplot(sweep_df, aes(x = mean, y = term_label, color = variance)) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "grey40") +
+  geom_errorbarh(aes(xmin = lo, xmax = hi), height = 0.2,
+                 position = position_dodge(width = 0.6)) +
+  geom_point(position = position_dodge(width = 0.6), size = 2) +
+  labs(title = "Posterior coefficients across four prior variances",
+       subtitle = expression(sigma[beta]^2 %in% "{1, 10, 100, 10000}"),
+       x = expression(beta), y = NULL, color = expression(sigma[beta]^2)) +
+  theme_minimal(base_size = 10)
+```
+
+```{r prior-sweep-range}
+range_tbl <- sweep_df %>%
+  group_by(term_label) %>%
+  summarise(mean_range = max(mean) - min(mean), .groups = "drop") %>%
+  arrange(desc(mean_range))
+knitr::kable(range_tbl, digits = 4,
+             caption = "Range of posterior means across the four prior variances")
+```
+
+The largest movement across four orders of magnitude of prior variance
+is only `r sprintf("%.3f", max(range_tbl$mean_range))` on the log-odds
+scale, for a coefficient whose posterior mean is itself on the order of
+1-2. At $n=$ `r nrow(train)`. So th likelihood dominates the tested priors.
+
+# Horseshoe prior sensitivity: does the global scale matter?
+
+The horseshoe's shrinkage behaviour is governed by the scale $s$ of the 
+half-Cauchy prior put on the **global** scale $\tau$: 
+$$\tau \sim \mathcal{C}^+(0, s)$$
+Small $s$ pulls every coefficient hard towards zero (more aggressive sparsity),
+large $s$ relaxes the global shrinkage. 
+This is the parameter whose choice could plausibly change *which* covariates the 
+model keeps, so it is the one worth testing.
+
+`horseshoe_prior_sweep.R` refits the exact Section 03 model three times,
+varying only this global scale, $s \in \{0.1, 1, 10\}$ ($s = 1$ is the
+Section 03 default), while the local scales $\lambda_j$ keep the
+standard $\mathcal{C}^+(0,1)$. For each fit it stores the posterior mean
+and $95\%$ credible interval of every coefficient, and the per-predictor
+shrinkage weight $\kappa_j = 1/(1+\lambda_j^2)$ (near $0$ = signal, near
+$1$ = shrunk, exactly as in Section 03).
+
+```{r hs-sweep-load}
+hs_sweep <- readRDS("../data/sensitivity/horseshoe_prior_sweep_results.rds")
+hs_scales <- names(hs_sweep)
+
+hs_df <- bind_rows(lapply(hs_scales, function(s) {
+  d <- hs_sweep[[s]]
+  d$scale <- s
+  d
+}))
+hs_df$scale <- factor(hs_df$scale, levels = hs_scales)
+```
+
+## Coefficients across global scales
+
+```{r hs-sweep-beta-plot, fig.width=9, fig.height=8}
+ggplot(hs_df, aes(x = beta_mean, y = reorder(term, beta_mean), color = scale)) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "grey40") +
+  geom_errorbarh(aes(xmin = beta_lo, xmax = beta_hi), height = 0.25,
+                 position = position_dodge(width = 0.6)) +
+  geom_point(position = position_dodge(width = 0.6), size = 1.8) +
+  labs(title = "Horseshoe posterior coefficients across three global scales",
+       subtitle = expression(tau %~% "C+(0, s), s in {0.1, 1, 10}"),
+       x = expression(beta[j]), y = NULL, color = "global scale s") +
+  theme_minimal(base_size = 10)
+```
+
+```{r hs-sweep-beta-range}
+hs_range <- hs_df %>%
+  group_by(term) %>%
+  summarise(beta_range = max(beta_mean) - min(beta_mean), .groups = "drop") %>%
+  arrange(desc(beta_range))
+knitr::kable(head(hs_range, 8), digits = 3,
+             caption = "Largest movement of the posterior mean across the three global scales")
+```
+
+## Shrinkage weights and signal/noise stability
+
+```{r hs-sweep-kappa-wide}
+kappa_wide <- hs_df %>%
+  select(term, scale, kappa) %>%
+  pivot_wider(names_from = scale, values_from = kappa)
+knitr::kable(kappa_wide, digits = 3,
+             caption = "Posterior shrinkage weight kappa_j at each global scale")
+```
+
+```{r hs-sweep-signal-stability}
+signal_wide <- hs_df %>%
+  mutate(signal = kappa < 0.5) %>%
+  select(term, scale, signal) %>%
+  pivot_wider(names_from = scale, values_from = signal)
+
+signal_cols <- setdiff(names(signal_wide), "term")
+signal_wide$stable <- apply(signal_wide[, signal_cols], 1,
+                            function(r) length(unique(r)) == 1)
+n_flips <- sum(!signal_wide$stable)
+
+# predictors classified as signal (kappa < 0.5) under the default scale s = 1
+default_signal <- signal_wide$term[signal_wide[["1"]]]
+
+knitr::kable(signal_wide, caption = "Signal (kappa < 0.5) at each scale; `stable` = same verdict across all three")
+```
+
+Across a hundred-fold range of the global scale, `r n_flips` of the 22
+predictors change their signal/noise classification. The covariates the
+model calls signal at the default scale ($s = 1$) --
+`r paste(default_signal, collapse = ", ")` -- are
+`r if (n_flips == 0) "exactly the set it keeps at every scale" else "largely preserved across scales"`,
+and the largest shift in any posterior mean is
+`r sprintf("%.3f", max(hs_range$beta_range))` on the log-odds scale. The
+strong effects identified in Section 03 (`disloyal Customer`,
+`Personal Travel`, `Seat comfort`) stay strong and confidently non-zero
+regardless of $s$; only the coefficients already sitting near the
+$\kappa = 0.5$ boundary drift, which is exactly where sensitivity to the
+global scale is expected and where we drew no firm conclusions in the
+first place. The headline reading of Section 03 is therefore not an
+artefact of the particular half-Cauchy scale we chose.
+
+
+
+# Structural-zero robustness check
+
+Section 03 speculated that `Departure/Arrival time convenient`'s
+counter-intuitive *negative* coefficient might be an artefact of the
+structural zeros flagged in Section 00 (zeros that plausibly mean "not
+applicable" rather than genuine dissatisfaction). We test that directly
+by refitting the full horseshoe model with those rows excluded
+(`structural_zero_refit.R`).
+
+```{r structural-zero-load}
+s3   <- readRDS("section03_loo.rds")            # Section 03 horseshoe summary (full data)
+zref <- readRDS("structural_zero_refit_results.rds")
+cat("Rows excluded:", zref$n_excluded, "of", zref$n_excluded + zref$n_remaining, "\n")
+cat("Rows remaining:", zref$n_remaining, "\n")
+```
+
+```{r structural-zero-table}
+knitr::kable(zref$result_tbl, row.names = FALSE, digits = 3,
+             caption = "Horseshoe refit excluding structural-zero rows")
+```
+
+```{r structural-zero-compare, fig.width=7, fig.height=5}
+full_tbl <- s3$kappa_tbl %>% mutate(fit = "Full data")
+zero_tbl <- zref$result_tbl %>% mutate(fit = "Excluding structural zeros")
+
+compare_df <- bind_rows(full_tbl, zero_tbl) %>%
+  filter(term %in% c("Dep/Arr time convenient", "Seat comfort", "Food and drink", "Gate location"))
+
+ggplot(compare_df, aes(x = beta_mean, y = term, color = fit)) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "grey40") +
+  geom_errorbarh(aes(xmin = beta_lo, xmax = beta_hi), height = 0.15,
+                 position = position_dodge(width = 0.4)) +
+  geom_point(position = position_dodge(width = 0.4), size = 2.2) +
+  labs(title = "The 'seat/catering/ground' cluster: full data vs. excluding structural zeros",
+       x = expression(beta), y = NULL, color = NULL) +
+  theme_minimal(base_size = 10)
+```
+
+**The hypothesis does not survive the check.**
+`Departure/Arrival time convenient`'s negative coefficient does not
+shrink towards zero when the ambiguous rows are removed -- it gets
+*more* negative and more confident (from
+`r sprintf("%.2f", full_tbl$beta_mean[full_tbl$term=="Dep/Arr time convenient"])`
+to
+`r sprintf("%.2f", zero_tbl$beta_mean[zero_tbl$term=="Dep/Arr time convenient"])`).
+Whatever drives this effect, it is not simply the structural-zero
+ambiguity we suspected in Section 03; we report this as an open,
+unresolved finding rather than force a tidier story onto it. On the
+other hand, `Seat comfort` and `Food and drink` -- the other two members
+of that same correlated cluster -- both strengthen substantially once
+the ambiguous rows are excluded (`Seat comfort` $\kappa$ drops from
+`r full_tbl$kappa[full_tbl$term=="Seat comfort"]` to
+`r zero_tbl$kappa[zero_tbl$term=="Seat comfort"]`), consistent with
+those zeros adding genuine noise to *those* two items specifically.

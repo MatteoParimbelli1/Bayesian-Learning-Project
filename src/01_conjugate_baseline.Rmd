@@ -6,6 +6,9 @@ output:
     toc: true
     toc_float: true
     number_sections: true
+editor_options: 
+  markdown: 
+    wrap: 72
 ---
 
 ```{r setup, include=FALSE}
@@ -17,10 +20,11 @@ library(tidyr)
 library(ggplot2)
 ```
 
-This is the "Bayesian 101" opening beat: one exact, auditable number and its
-uncertainty, with no black-box sampler yet. It uses the $n \approx 1{,}200$
-stratified training subsample produced in `00_data_audit_and_eda.Rmd` --
-closed-form throughout, since the Beta-Binomial model is conjugate.
+This is the "Bayesian 101" opening beat: one exact, auditable number and
+its uncertainty, with no black-box sampler yet. It uses the
+$n \approx 1{,}200$ stratified training subsample produced in
+`00_data_audit_and_eda.Rmd` -- closed-form throughout, since the
+Beta-Binomial model is conjugate.
 
 ```{r load-data}
 train <- read.csv("airline_train_n1200.csv", stringsAsFactors = FALSE)
@@ -31,18 +35,14 @@ n_train <- nrow(train)
 
 # Model
 
-$$
-X \mid p \sim \text{Binomial}(n, p), \qquad p \sim \text{Beta}(\alpha_0, \beta_0),
-$$
+$$X \mid p \sim \text{Binomial}(n, p), \qquad p \sim \text{Beta}(\alpha_0, \beta_0),$$
 
 so that, by conjugacy,
 
-$$
-p \mid X \sim \text{Beta}(\alpha_0 + X,\ \beta_0 + n - X).
-$$
+$$p \mid X \sim \text{Beta}(\alpha_0 + X,\ \beta_0 + n - X).$$
 
-We use $\text{Beta}(1,1)$ (uniform) as the default prior and revisit this
-choice formally in the prior-sensitivity check below.
+We use $\text{Beta}(1,1)$ (uniform) as the default prior and revisit
+this choice formally in the prior-sensitivity check below.
 
 # Overall satisfaction rate
 
@@ -57,9 +57,8 @@ post_ci   <- qbeta(c(0.025, 0.975), a_post, b_post)
 ```
 
 With `r n_train` customers in the training subsample and `r X` reporting
-satisfaction, the posterior is
-Beta(`r a_post`, `r b_post`), with posterior mean
-`r sprintf("%.3f", post_mean)` and 95% credible interval
+satisfaction, the posterior is Beta(`r a_post`, `r b_post`), with
+posterior mean `r sprintf("%.3f", post_mean)` and 95% credible interval
 [`r sprintf("%.3f", post_ci[1])`, `r sprintf("%.3f", post_ci[2])`].
 
 ```{r overall-plot, fig.width=6, fig.height=4}
@@ -137,8 +136,8 @@ the headline contrasts we quantify next.
 
 For two independent Beta posteriors we do not need a closed-form
 comparison: we draw paired Monte Carlo samples from each and estimate
-$P(p_A > p_B \mid \text{data})$ as the empirical proportion of draws where
-one exceeds the other.
+$P(p_A > p_B \mid \text{data})$ as the empirical proportion of draws
+where one exceeds the other.
 
 ```{r mc-contrast}
 set.seed(123)
@@ -181,11 +180,11 @@ ggplot(diff_df, aes(diff)) +
 
 With essentially all posterior mass on the positive side for all three
 contrasts, the data supports each direction with near certainty at this
-sample size. This is still purely descriptive, though: the three grouping
-variables are themselves correlated (e.g. business travellers are
-disproportionately Business class), so we cannot yet say which of these
-associations survive once we condition on the others -- that is exactly
-the job of the regression in Section 02.
+sample size. This is still purely descriptive, though: the three
+grouping variables are themselves correlated (e.g. business travellers
+are disproportionately Business class), so we cannot yet say which of
+these associations survive once we condition on the others -- that is
+exactly the job of the regression in Section 02.
 
 # Prior sensitivity analysis
 
@@ -193,7 +192,8 @@ We repeat the overall fit under three priors -- $\text{Beta}(1,1)$
 (uniform), $\text{Beta}(0.5,0.5)$ (Jeffreys), and a mildly skeptical
 $\text{Beta}(2,2)$ -- and also check the smallest subgroup we have
 (`Eco Plus`, $n=$ `r tbl_class$n[tbl_class$Class == "Eco Plus"]`), where
-prior sensitivity would show up first if it were going to show up at all.
+prior sensitivity would show up first if it were going to show up at
+all.
 
 ```{r prior-sensitivity}
 priors <- list(uniform = c(1, 1), jeffreys = c(0.5, 0.5), skeptical = c(2, 2))
@@ -232,9 +232,9 @@ ggplot(sens_all, aes(p, density, color = prior)) +
   theme_minimal(base_size = 10)
 ```
 
-Even for `Eco Plus`, the smallest and thus most prior-exposed subgroup, the
-three posteriors are visually indistinguishable and the posterior means
-differ only in the third decimal place. At this sample size the likelihood
-already dominates any of these three reasonable priors -- a genuinely
-uninformative result, in the sense that it tells us the *data*, not our
-prior choice, is driving the conclusions.
+Even for `Eco Plus`, the smallest and thus most prior-exposed subgroup,
+the three posteriors are visually indistinguishable and the posterior
+means differ only in the third decimal place. At this sample size the
+likelihood already dominates any of these three reasonable priors -- a
+genuinely uninformative result, in the sense that it tells us the
+*data*, not our prior choice, is driving the conclusions.

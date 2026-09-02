@@ -101,6 +101,7 @@ times, varying only the prior variance on every $\beta_j$:
 $\sigma^2_\beta \in \{1, 10, 100, 10000\}$.
 
 ```{r covariate-prep-vague}
+
 logDepDelay     <- log1p(train$Departure.Delay.in.Minutes)
 signedLogArr    <- sign(train$ArrivalDelay.Residual) * log1p(abs(train$ArrivalDelay.Residual))
 Age_std         <- std(train$Age)
@@ -113,8 +114,8 @@ arr_delay_std <- (signedLogArr - mu_a) / sd_a
 
 Class_EcoPlus  <- as.integer(train$Class == "Eco Plus")
 Class_Business <- as.integer(train$Class == "Business")
-TypeTravel_Personal <- as.integer(train$Type.of.Travel == "Personal Travel")
-CustType_disloyal   <- as.integer(train$Customer.Type == "disloyal Customer")
+TypeTravel_Personal <- as.integer(train$travel_type == "Personal Travel")
+CustType_disloyal   <- as.integer(train$customer_type == "disloyal Customer")
 
 X_dummy <- cbind(Age_std, Seat_std, FlightDist_std, Class_EcoPlus, Class_Business,
                   logDepDelay_std, TypeTravel_Personal, CustType_disloyal)

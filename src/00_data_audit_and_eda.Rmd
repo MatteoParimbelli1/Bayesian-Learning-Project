@@ -1,11 +1,14 @@
 ---
-title: "00 - Data Audit, EDA, and the Subsampling Decision"
+title: "00 - Data Audit, EDA, and the Subsampling Decision 01"
 subtitle: "Airline Customer Satisfaction -- Bayesian Learning & Monte Carlo Simulations, 2026"
 output:
   html_document:
     toc: true
     toc_float: true
     number_sections: true
+editor_options: 
+  markdown: 
+    wrap: 72
 ---
 
 ```{r setup, include=FALSE}
@@ -24,12 +27,12 @@ library(RColorBrewer)
 
 ## Loading the data and basic recoding
 
-We work with the full ~130k-row source file rather than the curated 1,000-row
-`airline_sub.csv` described in the brief (see the sampling decision below for
-how we reconcile the two).
+We work with the full \~130k-row source file rather than the curated
+1,000-row `airline_sub.csv` described in the brief (see the sampling
+decision below for how we reconcile the two).
 
 ```{r load-data}
-raw <- read.csv("Airline_customer_satisfaction.csv", stringsAsFactors = FALSE)
+raw <- read.csv("../data/Airline_customer_satisfaction.csv", stringsAsFactors = FALSE)
 
 df <- raw %>%
   mutate(
@@ -43,16 +46,17 @@ n_total   <- nrow(df)
 sat_rate  <- mean(df$satisfaction == "satisfied")
 ```
 
-The dataset contains `r format(n_total, big.mark = ",")` customers. The overall
-satisfaction rate is `r sprintf("%.1f%%", 100 * sat_rate)`, balanced enough for
-a straightforward Bernoulli / logistic treatment later on. `Class` has 3 levels
-(Eco, Eco Plus, Business); `Customer.Type` and `Type.of.Travel` are binary.
+The dataset contains `r format(n_total, big.mark = ",")` customers. The
+overall satisfaction rate is `r sprintf("%.1f%%", 100 * sat_rate)`,
+balanced enough for a straightforward Bernoulli / logistic treatment
+later on. `Class` has 3 levels (Eco, Eco Plus, Business);
+`Customer.Type` and `Type.of.Travel` are binary.
 
 ## Correlation structure of the 14 service-quality items
 
-The Likert-style service ratings (0-5) are not independent. We check this
-with a correlation heatmap, ordered by hierarchical clustering so that
-correlated blocks are visually adjacent.
+The Likert-style service ratings (0-5) are not independent. We check
+this with a correlation heatmap, ordered by hierarchical clustering so
+that correlated blocks are visually adjacent.
 
 ```{r service-items}
 service_items <- c("Seat.comfort", "Departure.Arrival.time.convenient", "Food.and.drink",
@@ -96,26 +100,28 @@ r_catering <- cluster_range(cluster_catering)
 Three blocks emerge clearly:
 
 - **Booking / connectivity**: `Inflight wifi service`, `Online support`,
-  `Ease of Online booking`, `Online boarding` move together
-  (pairwise correlations `r r_booking`).
+  `Ease of Online booking`, `Online boarding` move together (pairwise
+  correlations `r r_booking`).
 - **On-board comfort**: `On-board service`, `Leg room service`,
   `Baggage handling`, `Cleanliness` form a second cluster
   (`r r_onboard`).
-- **Seat / catering / ground experience**: `Seat comfort`, `Food and drink`,
-  `Departure/Arrival time convenient`, `Gate location` form a third,
-  slightly tighter cluster (`r r_catering`) -- this one was not obvious from
-  a first pass and only shows up once the full correlation matrix is
-  inspected; it is also, as the next section shows, exactly the cluster that
-  carries most of the structural-zero ambiguity.
+- **Seat / catering / ground experience**: `Seat comfort`,
+  `Food and drink`, `Departure/Arrival time convenient`, `Gate location`
+  form a third, slightly tighter cluster (`r r_catering`) -- this one
+  was not obvious from a first pass and only shows up once the full
+  correlation matrix is inspected; it is also, as the next section
+  shows, exactly the cluster that carries most of the structural-zero
+  ambiguity.
 
-This is the empirical basis for using a shrinkage prior (Section 3) rather
-than treating all 14 items as freely and independently informative.
+This is the empirical basis for using a shrinkage prior (Section 3)
+rather than treating all 14 items as freely and independently
+informative.
 
 ## Structural zeros in the service ratings
 
-Several items show a suspiciously large share of exact `0` ratings, which
-plausibly encode "not applicable" (e.g. no on-board wifi on some flights)
-rather than a genuine bottom-of-scale rating.
+Several items show a suspiciously large share of exact `0` ratings,
+which plausibly encode "not applicable" (e.g. no on-board wifi on some
+flights) rather than a genuine bottom-of-scale rating.
 
 ```{r structural-zeros}
 zero_share <- sort(sapply(df[, service_items], function(x) mean(x == 0)),
@@ -128,9 +134,10 @@ knitr::kable(
 )
 ```
 
-We flag, but do not model, the items with a non-trivial zero share (above
-2%) as a single per-row indicator, to be used later only as a robustness
-check (Section 5: does dropping these rows change the conclusions?).
+We flag, but do not model, the items with a non-trivial zero share
+(above 2%) as a single per-row indicator, to be used later only as a
+robustness check (Section 5: does dropping these rows change the
+conclusions?).
 
 ```{r flag-structural-zero}
 zero_candidates <- names(zero_share)[zero_share > 0.02]
@@ -141,13 +148,14 @@ df <- df %>%
 n_flagged <- sum(df$structural_zero_flag)
 ```
 
-`r length(zero_candidates)` items are flagged (`r paste(zero_candidates, collapse = ", ")`),
-affecting `r format(n_flagged, big.mark = ",")` rows
-(`r sprintf("%.1f%%", 100 * mean(df$structural_zero_flag))` of the data). This
-matches the earlier finding that these are exactly the items in the
-"seat / catering / ground experience" cluster above -- consistent with a
-shared "not applicable on this flight" mechanism rather than four unrelated
-data-quality issues.
+`r length(zero_candidates)` items are flagged
+(`r paste(zero_candidates, collapse = ", ")`), affecting
+`r format(n_flagged, big.mark = ",")` rows
+(`r sprintf("%.1f%%", 100 * mean(df$structural_zero_flag))` of the
+data). This matches the earlier finding that these are exactly the items
+in the "seat / catering / ground experience" cluster above -- consistent
+with a shared "not applicable on this flight" mechanism rather than four
+unrelated data-quality issues.
 
 ## Decorrelating Departure and Arrival delay
 
@@ -158,9 +166,9 @@ n_missing_arr <- sum(is.na(df$Arrival.Delay.in.Minutes))
 ```
 
 `Departure Delay` and `Arrival Delay` correlate at
-`r sprintf("%.3f", delay_cor)`: using both raw would be close to duplicating
-one variable. `Arrival Delay` also has `r n_missing_arr` missing values
-(`r sprintf("%.2f%%", 100 * n_missing_arr / n_total)`).
+`r sprintf("%.3f", delay_cor)`: using both raw would be close to
+duplicating one variable. `Arrival Delay` also has `r n_missing_arr`
+missing values (`r sprintf("%.2f%%", 100 * n_missing_arr / n_total)`).
 
 Rather than a simple difference, we regress `Arrival Delay` on
 `Departure Delay` and keep the **residual** as a second covariate -- by
@@ -178,14 +186,14 @@ check_cor <- cor(df$Departure.Delay.in.Minutes, df$ArrivalDelay.Residual,
                   use = "complete.obs")
 ```
 
-The fitted relationship is
-Arrival $\approx$ `r sprintf("%.2f", coef(delay_fit)[1])` $+$
-`r sprintf("%.3f", coef(delay_fit)[2])` $\times$ Departure
-(R$^2$ = `r sprintf("%.3f", summary(delay_fit)$r.squared)`), and the
-residual is essentially uncorrelated with Departure Delay by construction
-(r = `r formatC(check_cor, format = "e", digits = 2)`). The `r n_missing_arr`
-missing arrival delays propagate to missing residuals here; we do not drop
-or impute them in this section -- Section 2 treats them properly as
+The fitted relationship is Arrival $\approx$
+`r sprintf("%.2f", coef(delay_fit)[1])` $+$
+`r sprintf("%.3f", coef(delay_fit)[2])` $\times$ Departure (R$^2$ =
+`r sprintf("%.3f", summary(delay_fit)$r.squared)`), and the residual is
+essentially uncorrelated with Departure Delay by construction (r =
+`r formatC(check_cor, format = "e", digits = 2)`). The `r n_missing_arr`
+missing arrival delays propagate to missing residuals here; we do not
+drop or impute them in this section -- Section 2 treats them properly as
 stochastic nodes inside the JAGS model rather than discarding rows.
 
 ## Stratified subsample: matching the brief's intended scale
@@ -228,8 +236,8 @@ print(compare_tbl("Customer.Type"))
 ```
 
 The stratified draw preserves the population proportions closely on all
-three grouping variables, so subsequent sections can treat `train_df` as a
-faithful, fast-to-fit stand-in for the full population for model
+three grouping variables, so subsequent sections can treat `train_df` as
+a faithful, fast-to-fit stand-in for the full population for model
 development, with `test_df` reserved untouched for genuine out-of-sample
 evaluation.
 
@@ -254,8 +262,8 @@ df %>%
 Satisfied customers rate essentially every service item higher, most
 visibly for `Online boarding`, `Inflight entertainment` and
 `Ease of Online booking` -- consistent with the booking/connectivity
-cluster identified above being a strong candidate driver, to be confirmed
-formally in the modelling sections.
+cluster identified above being a strong candidate driver, to be
+confirmed formally in the modelling sections.
 
 ## Saving the derived datasets for the rest of the analysis
 
@@ -265,12 +273,12 @@ write.csv(train_df, "airline_train_n1200.csv", row.names = FALSE)
 write.csv(test_df,  "airline_test_holdout.csv", row.names = FALSE)
 ```
 
-`airline_full_clean.rds` (full data, recoded factors, `ArrivalDelay.Residual`
-and `structural_zero_flag` added), `airline_train_n1200.csv` and
-`airline_test_holdout.csv` are written next to this file and are the inputs
-for every section from here on -- no section past this point should
-re-derive these variables from the raw file. **Keep this Rmd and all the
-`.csv`/`.rds` files in the same folder** (no subfolders) so the relative
-paths resolve. Section 1 onward each live in their own numbered `.Rmd` file
-in this same folder and read these outputs back in rather than
-re-deriving them.
+`airline_full_clean.rds` (full data, recoded factors,
+`ArrivalDelay.Residual` and `structural_zero_flag` added),
+`airline_train_n1200.csv` and `airline_test_holdout.csv` are written
+next to this file and are the inputs for every section from here on --
+no section past this point should re-derive these variables from the raw
+file. **Keep this Rmd and all the `.csv`/`.rds` files in the same
+folder** (no subfolders) so the relative paths resolve. Section 1 onward
+each live in their own numbered `.Rmd` file in this same folder and read
+these outputs back in rather than re-deriving them.
