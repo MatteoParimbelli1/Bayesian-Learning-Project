@@ -32,8 +32,8 @@ the counter-intuitive `Departure/Arrival time convenient` coefficient
 from Section 03 survive dropping the ambiguous structural-zero rows?
 
 All the following checks require heacy JAGS fits, so we decided to split
-those in separate script files (`prior_sweep.R`,
-`horseshoe_prior_sweep.R`, `structural_zero_refit.R`) to avoid excessive
+those in separate script files (`04a_prior_sweep.R`,
+`04b_horseshoe_prior_sweep.R`, `04c_structural_zero_refit.R`) to avoid excessive
 long cells in this notebook. Scripts are meant to be executed ocne and
 then re-use their stored output.
 
@@ -48,7 +48,7 @@ std <- function(x) as.numeric(scale(x))
 We refit Section 02's model (vague priors, dummy `Class` encoding) four
 times, varying only the prior variance on every $\beta_j$:
 $\sigma^2_\beta \in \{1, 10, 100, 10000\}$. The fits are produced by
-`prior_sweep.R`.
+`04a_prior_sweep.R`.
 
 ```{r vague-term-labels}
 # Coefficient order returned by the sweep: beta[1..8], beta0, beta_arr.
@@ -60,7 +60,7 @@ term_labels_vague <- c("beta0" = "Intercept", "beta[1]" = "Age", "beta[2]" = "Se
 ```
 
 ```{r prior-sweep-load}
-sweep_results <- readRDS("../data/sensitivity/prior_sweep_results.rds")
+sweep_results <- readRDS("../data/04a_prior_sweep.rds")
 ```
 
 ```{r prior-sweep-plot, fig.width=8, fig.height=6}
@@ -109,7 +109,7 @@ large $s$ relaxes the global shrinkage.
 This is the parameter whose choice could plausibly change *which* covariates the 
 model keeps, so it is the one worth testing.
 
-`horseshoe_prior_sweep.R` refits the exact Section 03 model three times,
+`04b_horseshoe_prior_sweep.R` refits the exact Section 03 model three times,
 varying only this global scale, $s \in \{0.1, 1, 10\}$ ($s = 1$ is the
 Section 03 default), while the local scales $\lambda_j$ keep the
 standard $\mathcal{C}^+(0,1)$. For each fit it stores the posterior mean
@@ -118,7 +118,7 @@ shrinkage weight $\kappa_j = 1/(1+\lambda_j^2)$ (near $0$ = signal, near
 $1$ = shrunk, exactly as in Section 03).
 
 ```{r hs-sweep-load}
-hs_sweep <- readRDS("../data/sensitivity/horseshoe_prior_sweep_results.rds")
+hs_sweep <- readRDS("../data/04b_horseshoe_sweep.rds")
 hs_scales <- names(hs_sweep)
 
 hs_df <- bind_rows(lapply(hs_scales, function(s) {
@@ -203,11 +203,21 @@ counter-intuitive *negative* coefficient might be an artefact of the
 structural zeros flagged in Section 00 (zeros that plausibly mean "not
 applicable" rather than genuine dissatisfaction). We test that directly
 by refitting the full horseshoe model with those rows excluded
-(`structural_zero_refit.R`).
+(`04c_structural_zero_refit.R`).
 
 ```{r structural-zero-load}
-s3   <- readRDS("section03_loo.rds")            # Section 03 horseshoe summary (full data)
-zref <- readRDS("structural_zero_refit_results.rds")
+# Section 03 horseshoe summary (full data). The saved object holds the pieces,
+# not an assembled table, so rebuild one with the same columns as the refit's
+# result_tbl, otherwise the two cannot be bound together below.
+s3   <- readRDS("../data/03_horseshoe_summary.rds")
+s3$kappa_tbl <- data.frame(
+  term      = s3$term_labels[s3$beta_cols],
+  kappa     = as.numeric(s3$post_kappa[s3$beta_cols]),
+  beta_mean = as.numeric(s3$post_beta[s3$beta_cols]),
+  beta_lo   = as.numeric(s3$beta_ci[1, s3$beta_cols]),
+  beta_hi   = as.numeric(s3$beta_ci[2, s3$beta_cols]),
+  row.names = NULL)
+zref <- readRDS("../data/04c_structural_zero_refit.rds")
 cat("Rows excluded:", zref$n_excluded, "of", zref$n_excluded + zref$n_remaining, "\n")
 cat("Rows remaining:", zref$n_remaining, "\n")
 ```

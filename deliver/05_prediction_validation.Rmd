@@ -24,12 +24,12 @@ held-out test set. We evaluate the two JAGS models from Sections 02 and
 form since the Section 00 split.
 
 ```{r load}
-test <- read.csv("airline_test_holdout.csv", stringsAsFactors = FALSE)
+test <- read.csv("../data/airline_test_holdout.csv", stringsAsFactors = FALSE)
 test$y <- as.integer(test$satisfaction == "satisfied")
 n_test <- nrow(test)
 
-s2 <- readRDS("section02_loo.rds")
-s3 <- readRDS("section03_loo.rds")
+s2 <- readRDS("../data/02_logit_mcmc.rds")
+s3 <- readRDS("../data/03_horseshoe_final.rds")
 
 invlogit <- function(x) 1 / (1 + exp(-x))
 ```
@@ -45,13 +45,13 @@ on the test set, which would leak test information into preprocessing.
 ```{r test-covariates}
 std_with <- function(x, mean, sd) (x - mean) / sd
 
-logDepDelay_test  <- log1p(test$Departure.Delay.in.Minutes)
-signedLogArr_test <- sign(test$ArrivalDelay.Residual) * log1p(abs(test$ArrivalDelay.Residual))
+logDepDelay_test  <- log1p(test$dep_delay)
+signedLogArr_test <- test$log_mid_delay
 
-Class_EcoPlus_test  <- as.integer(test$Class == "Eco Plus")
-Class_Business_test <- as.integer(test$Class == "Business")
-TypeTravel_Personal_test <- as.integer(test$Type.of.Travel == "Personal Travel")
-CustType_disloyal_test   <- as.integer(test$Customer.Type == "disloyal Customer")
+Class_EcoPlus_test  <- as.integer(test$cabin_class == "Eco Plus")
+Class_Business_test <- as.integer(test$cabin_class == "Business")
+TypeTravel_Personal_test <- as.integer(test$travel_type == "Personal Travel")
+CustType_disloyal_test   <- as.integer(test$customer_type == "disloyal Customer")
 
 n_missing_test <- sum(is.na(signedLogArr_test))
 ```
@@ -67,16 +67,16 @@ is the expected value in the absence of other information.
 ```{r test-covariates-2}
 # --- Section 02 design (dummy Class, 8 covariates) ---
 X_test_s2 <- cbind(
-  Age_std        = std_with(test$Age, s2$standardization$Age_mean, s2$standardization$Age_sd),
-  Seat_std       = std_with(test$Seat.comfort, s2$standardization$Seat_mean, s2$standardization$Seat_sd),
-  FlightDist_std = std_with(test$Flight.Distance, s2$standardization$FlightDist_mean, s2$standardization$FlightDist_sd),
+  Age_std        = std_with(test$age, s2$standardization$Age_mean, s2$standardization$Age_sd),
+  Seat_std       = std_with(test$seat_comfort, s2$standardization$Seat_mean, s2$standardization$Seat_sd),
+  FlightDist_std = std_with(test$flight_distance, s2$standardization$FlightDist_mean, s2$standardization$FlightDist_sd),
   Class_EcoPlus  = Class_EcoPlus_test,
   Class_Business = Class_Business_test,
-  logDepDelay_std = std_with(logDepDelay_test, s2$standardization$logDepDelay_mean, s2$standardization$logDepDelay_sd),
+  logDepDelay_std = std_with(logDepDelay_test, s2$standardization$logdep_mean, s2$standardization$logDepDelay_sd),
   TypeTravel_Personal = TypeTravel_Personal_test,
   CustType_disloyal   = CustType_disloyal_test
 )
-arr_delay_test_s2 <- std_with(signedLogArr_test, s2$standardization$arr_delay_mean, s2$standardization$arr_delay_sd)
+arr_delay_test_s2 <- std_with(signedLogArr_test, s2$standardization$logmid_mean, s2$standardization$logmid_sd)
 arr_delay_test_s2[is.na(arr_delay_test_s2)] <- 0
 
 # --- Section 03 design (14 service items + covariates) ---
@@ -85,8 +85,8 @@ X_service_test <- sapply(service_items, function(nm) {
   std_with(test[[nm]], s3$standardization$service_means[nm], s3$standardization$service_sds[nm])
 })
 X_extra_test <- cbind(
-  Age_std        = std_with(test$Age, s3$standardization$Age_mean, s3$standardization$Age_sd),
-  FlightDist_std = std_with(test$Flight.Distance, s3$standardization$FlightDist_mean, s3$standardization$FlightDist_sd),
+  Age_std        = std_with(test$age, s3$standardization$Age_mean, s3$standardization$Age_sd),
+  FlightDist_std = std_with(test$flight_distance, s3$standardization$FlightDist_mean, s3$standardization$FlightDist_sd),
   Class_EcoPlus  = Class_EcoPlus_test,
   Class_Business = Class_Business_test,
   logDepDelay_std = std_with(logDepDelay_test, s3$standardization$logDepDelay_mean, s3$standardization$logDepDelay_sd),
@@ -94,7 +94,7 @@ X_extra_test <- cbind(
   CustType_disloyal   = CustType_disloyal_test
 )
 X_test_s3 <- cbind(X_service_test, X_extra_test)
-arr_delay_test_s3 <- std_with(signedLogArr_test, s3$standardization$arr_delay_mean, s3$standardization$arr_delay_sd)
+arr_delay_test_s3 <- std_with(signedLogArr_test, s3$standardization$logmid_mean, s3$standardization$logmid_sd)
 arr_delay_test_s3[is.na(arr_delay_test_s3)] <- 0
 ```
 
@@ -145,8 +145,8 @@ predict_model <- function(beta_draws, X, arr_delay, group_vars = NULL) {
 set.seed(123)
 pred_s2 <- predict_model(s2$beta_draws, X_test_s2, arr_delay_test_s2)
 pred_s3 <- predict_model(s3$beta_draws, X_test_s3, arr_delay_test_s3,
-                          group_vars = list(Class = test$Class, CustomerType = test$Customer.Type,
-                                             TypeOfTravel = test$Type.of.Travel))
+                          group_vars = list(Class = test$cabin_class, CustomerType = test$customer_type,
+                                             TypeOfTravel = test$travel_type))
 
 p_s2 <- pred_s2$p_mean
 p_s3 <- pred_s3$p_mean
@@ -164,16 +164,18 @@ question can be asked of all three model families side by side.
 
 ```{r bas-predict}
 suppressMessages(library(BAS))
-fit_bas <- readRDS("section04_basfit.rds")
+fit_bas <- readRDS("../data/A01_BAS_model.rds")
 
 df_test_bas <- data.frame(
   X_service_test,
   Age_std = X_extra_test[, "Age_std"], FlightDist_std = X_extra_test[, "FlightDist_std"],
   Class_EcoPlus = X_extra_test[, "Class_EcoPlus"], Class_Business = X_extra_test[, "Class_Business"],
-  logDepDelay_std = X_extra_test[, "logDepDelay_std"],
+  # Column names must match fit_bas$namesx exactly: BAS rebuilds the model
+  # frame from the formula, so a renamed column is simply a missing variable.
+  logdep_std = X_extra_test[, "logDepDelay_std"],
   TypeTravel_Personal = X_extra_test[, "TypeTravel_Personal"],
   CustType_disloyal = X_extra_test[, "CustType_disloyal"],
-  ArrivalDelay_resid = arr_delay_test_s3
+  logmid_delay = arr_delay_test_s3
 )
 
 # BAS's predict(..., estimator="BMA") builds an internal n_rows x n_models
@@ -287,7 +289,7 @@ make_confusion <- function(probs, labels, threshold) {
   list(table = tab, sensitivity = sens, specificity = spec, accuracy = acc)
 }
 
-base_rate <- mean(read.csv("airline_train_n1200.csv", stringsAsFactors = FALSE)$satisfaction == "satisfied")
+base_rate <- mean(read.csv("../data/airline_train_n1200.csv", stringsAsFactors = FALSE)$satisfaction == "satisfied")
 
 cm_05   <- make_confusion(p_s3, test$y, 0.5)
 cm_base <- make_confusion(p_s3, test$y, base_rate)
@@ -346,9 +348,9 @@ checked against the model's out-of-sample predictions on
 
 ```{r ppc-plot, fig.width=9, fig.height=3.5}
 observed_rates <- list(
-  Class = tapply(test$y, test$Class, mean),
-  CustomerType = tapply(test$y, test$Customer.Type, mean),
-  TypeOfTravel = tapply(test$y, test$Type.of.Travel, mean)
+  Class = tapply(test$y, test$cabin_class, mean),
+  CustomerType = tapply(test$y, test$customer_type, mean),
+  TypeOfTravel = tapply(test$y, test$travel_type, mean)
 )
 
 ppc_df <- bind_rows(lapply(names(pred_s3$group_rep), function(gname) {
@@ -363,7 +365,7 @@ obs_df <- bind_rows(lapply(names(observed_rates), function(gname) {
              facet = gname)
 }))
 
-ggplot(ppc_df, aes(simulated_rate, fill = level)) +
+p_ppc <- ggplot(ppc_df, aes(simulated_rate, fill = level)) +
   geom_density(alpha = 0.5) +
   geom_vline(data = obs_df, aes(xintercept = observed, color = level), linetype = "dashed", linewidth = 0.9) +
   facet_wrap(~ facet, scales = "free") +
@@ -371,6 +373,10 @@ ggplot(ppc_df, aes(simulated_rate, fill = level)) +
        subtitle = "Dashed lines = actually observed rate in the held-out test set",
        x = "Simulated satisfaction rate", y = "Density", fill = NULL, color = NULL) +
   theme_minimal(base_size = 9)
+dir.create("figs", showWarnings = FALSE)
+dir.create("../figs", showWarnings = FALSE)
+ggsave("../figs/ppc_subgroups.png", p_ppc, width = 9, height = 3.5, dpi = 150)
+p_ppc
 ```
 
 The observed rates (dashed lines) fall inside the bulk of each

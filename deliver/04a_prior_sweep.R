@@ -1,8 +1,25 @@
-suppressMessages({library(rjags); library(coda); library(here)})
+suppressMessages({library(rjags); library(coda)})
 set.seed(123)
 
-# it might be necessary to djust th path
-train <- read.csv(here("project/data/airline_train_n1200.csv"), stringsAsFactors = FALSE)
+## ---------------------------------------------------------------------------
+## Logit prior-variance sweep (companion script to 04_models_sensitivity.Rmd).
+##
+## Paths are resolved relative to this script's own location, so it can be run
+## from anywhere:  Rscript deliver/04a_prior_sweep.R
+## ---------------------------------------------------------------------------
+.args <- commandArgs(trailingOnly = FALSE)
+.file <- sub("^--file=", "", .args[grep("^--file=", .args)])
+# Rscript encodes spaces in --file= as "~+~", which breaks the path on any
+# machine whose repo lives under e.g. "My Drive". Decode them back.
+.file <- gsub("~\\+~", " ", .file)
+root  <- if (length(.file)) {
+  normalizePath(file.path(dirname(.file), ".."))
+} else {
+  normalizePath("..")   # fallback: sourced interactively from deliver/
+}
+
+train <- read.csv(file.path(root, "data/airline_train_n1200.csv"),
+                  stringsAsFactors = FALSE)
 train$y <- as.integer(train$satisfaction == "satisfied")
 std <- function(x) as.numeric(scale(x))
 
@@ -10,13 +27,15 @@ Age_std         <- std(train$age)
 Seat_std        <- std(train$seat_comfort)
 FlightDist_std  <- std(train$flight_distance)
 logDepDelay_std <- std(train$log_dep_delay)
-logMidDelay_std   <- std(train$log_mid_delay)
+logMidDelay_std <- std(train$log_mid_delay)
 
 Class_EcoPlus  <- as.integer(train$cabin_class == "Eco Plus")
 Class_Business <- as.integer(train$cabin_class == "Business")
 TypeTravel_Personal <- as.integer(train$travel_type == "Personal Travel")
 CustType_disloyal   <- as.integer(train$customer_type == "disloyal Customer")
 
+## Column order must match term_labels_vague in 04_models_sensitivity.Rmd
+## (and X_dummy in 02_logit_model.Rmd).
 X_dummy <- cbind(Age_std, Seat_std, FlightDist_std, Class_EcoPlus, Class_Business,
                  logDepDelay_std, TypeTravel_Personal, CustType_disloyal)
 
@@ -57,5 +76,6 @@ for (v in variances) {
   results[[as.character(v)]] <- fit_variance(v)
 }
 
-saveRDS(results, here("project/data/sensitivity/logit_prior_sweep_results.rds"))
+out_dir <- file.path(root, "data")
+saveRDS(results, file.path(out_dir, "04a_prior_sweep.rds"))
 cat(format(Sys.time()), "DONE\n")
