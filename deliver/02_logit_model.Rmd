@@ -1,6 +1,11 @@
 ---
 title: "02_logit_model"
-output: html_document
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    self_contained: true
 ---
 
 ```{r setup, include=FALSE}

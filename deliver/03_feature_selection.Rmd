@@ -38,13 +38,14 @@ Age_std         <- std(train$age)
 FlightDist_std  <- std(train$flight_distance)
 logmid_delay    <- std(train$log_mid_delay)
 
+names(train)
 
 Class_EcoPlus  <- as.integer(train$cabin_class == "Eco Plus")
 Class_Business <- as.integer(train$cabin_class == "Business")
-TypeTravel_Personal <- as.integer(train$type_travel == "Personal Travel")
+TypeTravel_Personal <- as.integer(train$travel_type == "Personal Travel")
 CustType_disloyal   <- as.integer(train$customer_type == "disloyal Customer")
 
-X_extra <- cbind(logdep_std, Age_std, FlightDist_std, Class_EcoPlus, Class_Business, TypeTravel_Personal, CustType_disloyal)
+X_extra <- cbind(Age_std, FlightDist_std, Class_EcoPlus, Class_Business, logdep_std, TypeTravel_Personal, CustType_disloyal)
 
 X_full <- cbind(X_service, X_extra)
 P <- ncol(X_full)
@@ -90,10 +91,11 @@ The horseshoe mixes more slowly than the vague-prior model of Section 02 because
 ```{r fit-horseshoe, cache=TRUE}
 set.seed(123)
 
+# adjust these values to tune MCMC convergence
 n_chains  = 3
-n_adapt   = 1500
+n_adapt   = 5000
 burn_in   = 1000
-iter      = 5000
+iter      = 10000
 thinning  = 3
 
 
@@ -243,7 +245,7 @@ for (g in groups_beta) {
 
 sm <- as.matrix(samples)
 beta_cols_only   <- c(paste0("beta[", 1:P, "]"), "beta_arr")
-lambda_cols_only <- c(paste0("lambda[", 1:P, "]"), "lambda_arr", "tau")
+lambda_cols_only <- c(paste0("lambda[", 1:P, "]"), "lambda_arr")
 
 beta_mat   <- sm[, beta_cols_only]
 lambda_mat <- sm[, lambda_cols_only]
@@ -261,7 +263,7 @@ term_labels <- c(
   "beta[10]" = "Leg room service", "beta[11]" = "Baggage handling", "beta[12]" = "Checkin service",
   "beta[13]" = "Cleanliness", "beta[14]" = "Online boarding", "beta[15]" = "Age", "beta[16]" = "Flight Distance",
   "beta[17]" = "Class: Eco Plus", "beta[18]" = "Class: Business", "beta[19]" = "log(1+Departure Delay)",
-  "beta[20]" = "Personal Travel", "beta[21]" = "disloyal Customer", "beta_arr" = "Arrival delay residual"
+  "beta[20]" = "Personal Travel", "beta[21]" = "disloyal Customer", "beta_arr" = "Mid-flight delay"
 )
 
 kappa_tbl <- data.frame(
@@ -310,13 +312,20 @@ kappa_tbl %>%
 ```
 
 ```{r}
-# store horseshoe MCMC for later anaylisi
+# store horseshoe MCMC for later analyses
+
+beta0_summary <- c(mean = mean(sm[, "beta0"]),
+                   quantile(sm[, "beta0"], c(0.025, 0.975)))
+tau_summary   <- c(mean = mean(sm[, "tau"]),
+                   quantile(sm[, "tau"],   c(0.025, 0.975)))
 saveRDS(list(
-  post_kappa = post_kappa, 
-  post_beta = post_beta, 
-  beta_ci = beta_ci,
+  post_kappa  = post_kappa, 
+  post_beta   = post_beta, 
+  beta_ci     = beta_ci,
+  beta0       = beta0_summary,
+  tau         = tau_summary,
   term_labels = term_labels, 
-  beta_cols = beta_cols_only,
+  beta_cols   = beta_cols_only,
   lambda_cols = lambda_cols_only
   ), "../data/03_horseshoe_summary.rds")
 ```
@@ -348,8 +357,9 @@ service_sds   <- apply(train[, service_items], 2, sd)
 standardization <- list(
   service_means = service_means, service_sds = service_sds,
   Age_mean = mean(train$age), Age_sd = sd(train$age),
-  FlightDist_mean = mean(train$flight_distance), FlightDist_sd = sd(train$flilght_distancr),
-  logDepDelay_mean = mean(train$log_dep_delay), logDepDelay_sd = sd(train$log_dep_delay), logmid_delay = mean(train$log_mid_delay), logmid_delay = sd(train$log_mid_delay)
+  FlightDist_mean = mean(train$flight_distance), FlightDist_sd = sd(train$flight_distance),
+  logDepDelay_mean = mean(train$log_dep_delay), logDepDelay_sd = sd(train$log_dep_delay),
+  logmid_mean = mean(train$log_mid_delay), logmid_sd = sd(train$log_mid_delay)
 )
 
 saveRDS(list(
