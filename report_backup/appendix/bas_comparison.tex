@@ -73,6 +73,94 @@ logmarg   & {NA} & -516.838 & -517.392 & -517.578 & -517.835 & -518.155\\
 % ==================================================================
 \section{Parameter-space convergence}
 \label{app:mcmc_logit}\label{app:mcmc_horseshoe}
+
+% ---- mutate din corp pentru a respecta limita de pagini ----
+\begin{table}[htbp]
+  \centering
+  \caption{MCMC settings used for the logit model}
+  \label{tab:mcmc_settings}
+  \begin{tabular}{lr}
+    \toprule
+    Setting & Value \\
+    \midrule
+    Chains            & 3 \\
+    Adaptation        & 1500 \\
+    Burn-in           & 1000 \\
+    Iterations (kept) & 3000 \\
+    Thinning          & 7 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+  \centering
+  \caption{MCMC settings used for the horseshoe model}
+  \label{tab:hs_mcmc_settings}
+  \begin{tabular}{lr}
+    \toprule
+    Setting & Value \\
+    \midrule
+    Chains            & 3 \\
+    Adaptation        & 1500 \\
+    Burn-in           & 1000 \\
+    Iterations (kept) & 5000 \\
+    Thinning          & 3 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.9\linewidth]{img/horseshoe_model/trace_beta_1.png}
+  \caption{Representative trace plot for a subset of the regression coefficients
+           $\beta_j$ under the horseshoe prior (three chains).}
+  \label{fig:hs_trace_beta}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.9\linewidth]{img/horseshoe_model/trace_lambda_1.png}
+  \caption{Representative trace plot for the local scales $\lambda_j$ and the
+           global scale $\tau$ (three chains). These scale parameters mix more
+           slowly than the coefficients.}
+  \label{fig:hs_trace_lambda}
+\end{figure}
+
+\begin{table}[htbp]
+\centering
+\caption{Posterior shrinkage weight $\kappa_j$ at each global scale
+(one row per predictor; 22 predictors in total).}
+\label{tab:hs-kappa}
+\begin{tabular}{lccc}
+\toprule
+Term & $s = 0.1$ & $s = 1$ & $s = 10$ \\
+\midrule
+disloyal Customer              & 0.052 & 0.071 & 0.076 \\
+Inflight entertainment         & 0.133 & 0.171 & 0.181 \\
+Class: Business                & 0.145 & 0.180 & 0.191 \\
+On-board service               & 0.312 & 0.364 & 0.378 \\
+Personal Travel                & 0.316 & 0.349 & 0.362 \\
+Seat comfort                   & 0.326 & 0.365 & 0.382 \\
+Ease of Online booking         & 0.361 & 0.416 & 0.429 \\
+Checkin service                & 0.370 & 0.426 & 0.434 \\
+Dep/Arr time convenient        & 0.371 & 0.418 & 0.419 \\
+Leg room service               & 0.397 & 0.449 & 0.465 \\
+Food and drink                 & 0.449 & 0.489 & 0.489 \\
+Online support                 & 0.485 & 0.525 & 0.534 \\
+Cleanliness                    & 0.509 & 0.544 & 0.550 \\
+Class: Eco Plus                & 0.653 & 0.667 & 0.667 \\
+Baggage handling               & 0.673 & 0.692 & 0.703 \\
+log(1+Departure Delay)         & 0.684 & 0.700 & 0.717 \\
+Inflight wifi service          & 0.705 & 0.740 & 0.739 \\
+Online boarding                & 0.714 & 0.728 & 0.732 \\
+Age                            & 0.735 & 0.765 & 0.766 \\
+Flight Distance                & 0.751 & 0.752 & 0.770 \\
+Gate location                  & 0.751 & 0.756 & 0.750 \\
+Mid-flight delay (signed log)  & 0.770 & 0.780 & 0.783 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
 % ==================================================================
 We now test the goodness of the MCMC search over the parameter space
 executed by BAS.
@@ -190,10 +278,10 @@ denotes the single disagreement.}
 \end{figure}
 
 $91\%$ of the $22$ predictors get the same signal/noise call from BAS's
-model-space search and from the horseshoe's continuous shrinkage --- two
+model-space search and from the horseshoe's continuous shrinkage - two
 structurally different estimation strategies (discrete model averaging
 vs.\ a single shrinkage prior) landing on the same handful of variables.
 The one disagreement, \texttt{Class:\ Business} (PIP $0.993$,
 $\kappa = 0.186$), is a genuine borderline case in both methods (BAS just
 below its $0.5$ cutoff, the horseshoe's credible interval for it crossing
-zero in Section~03) --- not a real contradiction between them.
+zero in Section~03) - not a real contradiction between them.

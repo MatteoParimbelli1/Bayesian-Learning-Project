@@ -135,92 +135,20 @@ Cleanliness                    & 0.004 \\
 % ------------------------------------------------------------------
 \subsubsection{Shrinkage weights and signal/noise stability}
 % ------------------------------------------------------------------
-Table~\ref{tab:hs-kappa} gives the posterior shrinkage weight
-$\kappa_j$ for every predictor at each global scale, and
-Table~\ref{tab:hs-signal} turns each $\kappa_j$ into a signal/noise
-verdict ($\kappa_j < 0.5 \Rightarrow$ signal), flagging as
-\texttt{stable} the predictors that keep the same verdict at all three
-scales.
-
-\begin{table}[htbp]
-\centering
-\caption{Posterior shrinkage weight $\kappa_j$ at each global scale
-(one row per predictor; 22 predictors in total).}
-\label{tab:hs-kappa}
-\begin{tabular}{lccc}
-\toprule
-Term & $s = 0.1$ & $s = 1$ & $s = 10$ \\
-\midrule
-disloyal Customer              & 0.052 & 0.071 & 0.076 \\
-Inflight entertainment         & 0.133 & 0.171 & 0.181 \\
-Class: Business                & 0.145 & 0.180 & 0.191 \\
-On-board service               & 0.312 & 0.364 & 0.378 \\
-Personal Travel                & 0.316 & 0.349 & 0.362 \\
-Seat comfort                   & 0.326 & 0.365 & 0.382 \\
-Ease of Online booking         & 0.361 & 0.416 & 0.429 \\
-Checkin service                & 0.370 & 0.426 & 0.434 \\
-Dep/Arr time convenient        & 0.371 & 0.418 & 0.419 \\
-Leg room service               & 0.397 & 0.449 & 0.465 \\
-Food and drink                 & 0.449 & 0.489 & 0.489 \\
-Online support                 & 0.485 & 0.525 & 0.534 \\
-Cleanliness                    & 0.509 & 0.544 & 0.550 \\
-Class: Eco Plus                & 0.653 & 0.667 & 0.667 \\
-Baggage handling               & 0.673 & 0.692 & 0.703 \\
-log(1+Departure Delay)         & 0.684 & 0.700 & 0.717 \\
-Inflight wifi service          & 0.705 & 0.740 & 0.739 \\
-Online boarding                & 0.714 & 0.728 & 0.732 \\
-Age                            & 0.735 & 0.765 & 0.766 \\
-Flight Distance                & 0.751 & 0.752 & 0.770 \\
-Gate location                  & 0.751 & 0.756 & 0.750 \\
-Mid-flight delay (signed log)  & 0.770 & 0.780 & 0.783 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\begin{table}[htbp]
-\centering
-\caption{Signal ($\kappa_j < 0.5$) at each global scale; \texttt{stable}
-indicates the same verdict across all three scales.}
-\label{tab:hs-signal}
-\begin{tabular}{lcccc}
-\toprule
-Term & $s = 0.1$ & $s = 1$ & $s = 10$ & stable \\
-\midrule
-disloyal Customer              & yes & yes & yes & \checkmark \\
-Inflight entertainment         & yes & yes & yes & \checkmark \\
-Class: Business                & yes & yes & yes & \checkmark \\
-On-board service               & yes & yes & yes & \checkmark \\
-Personal Travel                & yes & yes & yes & \checkmark \\
-Seat comfort                   & yes & yes & yes & \checkmark \\
-Ease of Online booking         & yes & yes & yes & \checkmark \\
-Checkin service                & yes & yes & yes & \checkmark \\
-Dep/Arr time convenient        & yes & yes & yes & \checkmark \\
-Leg room service               & yes & yes & yes & \checkmark \\
-Food and drink                 & yes & yes & yes & \checkmark \\
-Online support                 & yes & no  & no  &            \\
-Cleanliness                    & no  & no  & no  & \checkmark \\
-Class: Eco Plus                & no  & no  & no  & \checkmark \\
-Baggage handling               & no  & no  & no  & \checkmark \\
-log(1+Departure Delay)         & no  & no  & no  & \checkmark \\
-Inflight wifi service          & no  & no  & no  & \checkmark \\
-Online boarding                & no  & no  & no  & \checkmark \\
-Age                            & no  & no  & no  & \checkmark \\
-Flight Distance                & no  & no  & no  & \checkmark \\
-Gate location                  & no  & no  & no  & \checkmark \\
-Mid-flight delay (signed log)  & no  & no  & no  & \checkmark \\
-\bottomrule
-\end{tabular}
-\end{table}
+Table~\ref{tab:hs-kappa} in Appendix~\ref{app:mcmc_horseshoe} gives the
+posterior shrinkage weight $\kappa_j$ for every predictor at each global
+scale. Reading it against the $\kappa_j < 0.5$ threshold gives the
+signal/noise verdict discussed below.
 
 Across a hundred-fold range of the global scale, one of the
 $22$ predictors changes its signal/noise classification. The covariates
-the model calls signal at the default scale ($s = 1$) ---
+the model calls signal at the default scale ($s = 1$) -
 \texttt{disloyal Customer}, \texttt{Inflight entertainment},
 \texttt{Class: Business}, \texttt{On-board service},
 \texttt{Personal Travel}, \texttt{Seat comfort},
 \texttt{Ease of Online booking}, \texttt{Checkin service},
 \texttt{Dep/Arr time convenient}, \texttt{Leg room service} and
-\texttt{Food and drink} --- are largely preserved across scales,
+\texttt{Food and drink} - are largely preserved across scales,
 and the largest shift in any posterior mean is $0.018$ on
 the log-odds scale. The strong effects identified in Section~03
 (\texttt{disloyal Customer}, \texttt{Personal Travel},
@@ -249,7 +177,9 @@ ambiguous rows.
 
 \begin{table}[htbp]
 \centering
-\caption{Horseshoe refit excluding structural-zero rows.}
+\caption{Horseshoe refit excluding structural-zero rows. Only the
+predictors the model keeps as signal ($\kappa_j < 0.5$) are shown; the full
+table is in Appendix~\ref{app:mcmc_horseshoe}.}
 \label{tab:structzero}
 \begin{tabular}{lcccc}
 \toprule
@@ -265,18 +195,6 @@ Dep/Arr time convenient        & $-0.513$ & $-0.782$ & $-0.234$ & 0.347 \\
 Ease of Online booking         & $+0.493$ & $+0.090$ & $+0.902$ & 0.370 \\
 Checkin service                & $+0.378$ & $+0.154$ & $+0.595$ & 0.420 \\
 Leg room service               & $+0.297$ & $+0.056$ & $+0.529$ & 0.486 \\
-Online support                 & $+0.249$ & $-0.021$ & $+0.548$ & 0.548 \\
-Gate location                  & $-0.166$ & $-0.459$ & $+0.046$ & 0.618 \\
-Cleanliness                    & $+0.158$ & $-0.054$ & $+0.426$ & 0.630 \\
-Baggage handling               & $+0.130$ & $-0.058$ & $+0.386$ & 0.662 \\
-Class: Eco Plus                & $+0.014$ & $-0.467$ & $+0.505$ & 0.670 \\
-Inflight wifi service          & $-0.106$ & $-0.396$ & $+0.103$ & 0.684 \\
-log(1+Departure Delay)         & $-0.087$ & $-0.294$ & $+0.067$ & 0.714 \\
-Food and drink                 & $+0.020$ & $-0.224$ & $+0.282$ & 0.733 \\
-Online boarding                & $+0.032$ & $-0.202$ & $+0.293$ & 0.735 \\
-Flight Distance                & $-0.016$ & $-0.194$ & $+0.149$ & 0.763 \\
-Age                            & $-0.028$ & $-0.191$ & $+0.114$ & 0.779 \\
-Mid-flight delay (signed log)  & $-0.013$ & $-0.185$ & $+0.144$ & 0.780 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -291,7 +209,7 @@ full data vs.\ excluding structural-zero rows.}
 
 \noindent\textbf{The hypothesis does not survive the check.}
 \texttt{Departure/Arrival time convenient}'s negative coefficient does
-not shrink towards zero when the ambiguous rows are removed --- it gets
+not shrink towards zero when the ambiguous rows are removed - it gets
 \emph{more} negative (from $-0.335$ to $-0.513$), while its credible
 interval widens slightly, as expected with $110$ fewer rows. Whatever
 drives this effect, it is not
@@ -306,7 +224,6 @@ signal ($\kappa = 0.492$, $\beta = -0.275$) to firmly shrunk
 ($\kappa = 0.733$, $\beta = +0.020$). The structural zeros therefore
 do not add uniform noise across the cluster; they affect its members
 differently.
-
 
 % ==================================================================
 \subsection{Sample-size robustness}
