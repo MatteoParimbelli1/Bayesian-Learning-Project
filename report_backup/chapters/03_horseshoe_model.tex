@@ -75,8 +75,8 @@ Because of the heavy-tailed half-Cauchy hyperpriors, the horseshoe posterior
 mixes more slowly than the vague-prior model of Section \ref{sec:logit}, and it
 is computationally heavier ($22$ coefficients, $22$ local scales and one global
 scale, against the $9$ parameters of Section \ref{sec:logit}). We therefore
-budget a longer sampling run and thinning from the outset; the settings, reported
-in Table \ref{tab:hs_mcmc_settings}, are deliberately modest given the
+budget a longer sampling run and thinning from the outset; the settings, listed
+in Appendix~\ref{app:mcmc_horseshoe}, are deliberately modest given the
 single-core environment and could be extended on a larger machine.
 
 Convergence was assessed separately for the two blocks of parameters, the
@@ -87,9 +87,9 @@ reduction factors, the effective sample sizes, and the trace and autocorrelation
 plots. The coefficients mix well and show scale-reduction factors close to $1$;
 the scale parameters, and $\tau$ in particular, mix more slowly and show higher
 autocorrelation, as expected for a horseshoe, but reach effective sample sizes
-adequate for the summaries we report. Figures \ref{fig:hs_trace_beta} and
-\ref{fig:hs_trace_lambda} show a representative trace plot for each block. The
-complete diagnostic material - all trace and autocorrelation plots for both the
+adequate for the summaries we report. The
+complete diagnostic material - representative trace plots for each block, all
+autocorrelation plots for both the
 $\beta$ and the $\lambda$ parameters, together with the full Gelman--Rubin and
 effective-sample-size tables - is collected in Appendix
 \ref{app:mcmc_horseshoe}.

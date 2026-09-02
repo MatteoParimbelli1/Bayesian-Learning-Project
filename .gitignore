@@ -19,10 +19,10 @@ fits/
 # live in report_backup/img/, so these are regenerable output, not sources.
 figs/
 
-# Report backup: LaTeX sources and figures are tracked, so the Overleaf
-# project can be rebuilt from the repo alone (see report_backup/README.md).
-# Build output is not.
-report_backup/*.pdf
+# Report backup: LaTeX sources, figures and the compiled main.pdf are tracked,
+# so the Overleaf project can be rebuilt from the repo alone and everyone can
+# read the current report without compiling it (see report_backup/README.md).
+# LaTeX build intermediates are not.
 report_backup/*.aux
 report_backup/*.log
 report_backup/*.out

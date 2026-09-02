@@ -4,8 +4,11 @@ The report is written in Overleaf; this is a copy of its LaTeX sources so the
 whole team can read and diff them from the repo, and so a working version
 survives if the Overleaf project is lost.
 
-Sources and figures are both here, so the project can be rebuilt in Overleaf
-from this folder alone. The figures are also reproducible: the notebooks in
+Sources, figures and the compiled `main.pdf` are all here, so the project can
+be rebuilt in Overleaf from this folder alone and anyone can read the current
+report without compiling it.
+
+To rebuild the PDF locally: `latexmk -pdf main.tex` from this folder. The figures are also reproducible: the notebooks in
 `deliver/` regenerate them into `figs/`.
 
 ## Restoring into a fresh Overleaf project
