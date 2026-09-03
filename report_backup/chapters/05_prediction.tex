@@ -33,23 +33,22 @@ pushing every retained draw through the inverse link and averaging:
   \Bigr),
   \label{eq:postpred}
 \end{equation}
-where $S$ is the number of retained posterior draws. Note that this is the
-average of the transformed draws, not the transform of the averaged draws:
-$\operatorname{logit}^{-1}$ is non-linear, so
+This averages the transformed draws rather than transforming the averaged
+ones: $\operatorname{logit}^{-1}$ is non-linear, so
 $\mathbb{E}[g(\theta)] \neq g(\mathbb{E}[\theta])$, and only the former
-propagates posterior uncertainty into the prediction. The test covariates are
-standardised with the \emph{training} means and standard deviations, so no
-information from the held-out set enters the fitted model.
+propagates posterior uncertainty. Test covariates are standardised with the
+\emph{training} means and standard deviations, so nothing from the held-out
+set enters the fit.
 
 \subsection{Discrimination and probabilistic accuracy}
-Two complementary summaries are reported. The area under the ROC curve (AUC)
-measures how well the model \emph{ranks} customers by predicted satisfaction
-and is invariant to the choice of cutoff. The Brier score,
+We report two complementary summaries. The area under the ROC curve (AUC)
+measures how well the model \emph{ranks} customers and is invariant to the
+cutoff. The Brier score,
 \begin{equation}
   \mathrm{BS} \;=\; \frac{1}{n}\sum_{i=1}^{n}\bigl(\hat{p}_i - y_i\bigr)^2 ,
   \label{eq:brier}
 \end{equation}
-is a strictly proper scoring rule: it is minimised only when the stated
+is a strictly proper scoring rule, minimised only when the stated
 probabilities match the true ones, so it rewards predictions that are both
 well ranked and numerically honest. On the held-out set the horseshoe model
 attains an AUC of $0.900$ and a Brier score of $0.126$.
@@ -62,8 +61,10 @@ not perfectly balanced.
 
 \begin{table}[htbp]
 \centering
+\small
 \caption{Classification performance on the held-out set at two cutoffs.}
 \label{tab:pred-cutoff}
+\setlength{\tabcolsep}{4pt}
 \begin{tabular}{lccc}
 \toprule
 Cutoff & Sensitivity & Specificity & Accuracy \\
@@ -74,28 +75,37 @@ $t = \bar{y} = 0.546$  & 0.815 & 0.843 & 0.828 \\
 \end{tabular}
 \end{table}
 
-Moving the cutoff to the base rate trades about two points of sensitivity for
-three points of specificity and leaves overall accuracy essentially unchanged
-($0.826$ against $0.828$). That near-indifference is itself informative: the
-errors are not concentrated on one side, and accuracy alone is a blunt
-instrument for choosing an operating point. What the right cutoff is depends
-on what the two mistakes cost, which is the subject of
-Section~\ref{sec:pred-loss}.
+Moving to the base rate trades about two points of sensitivity for three of
+specificity and leaves accuracy essentially unchanged ($0.826$ against
+$0.828$). That near-indifference is informative: the errors are not
+concentrated on one side, and accuracy alone is a blunt instrument for
+choosing an operating point. The right cutoff depends on what the two mistakes
+cost, which is Section~\ref{sec:pred-loss}.
 
 \subsection{Calibration}
 Neither AUC nor accuracy asks whether the predicted probabilities \emph{mean}
-what they claim. Calibration does: among the customers the model calls $70\%$
-likely to be satisfied, roughly $70\%$ should in fact be satisfied. For a
-Bayesian analysis this matters as much as discrimination, since the posterior
-predictive probability is the object actually reported.
-Table~\ref{tab:calibration} bins the held-out customers into deciles of
-predicted probability and compares the mean prediction in each bin against the
-observed satisfaction rate.
+what they claim: among customers the model calls $70\%$ likely to be satisfied,
+roughly $70\%$ should be. This matters as much as discrimination here, since
+the posterior predictive probability is the object we report.
+Table~\ref{tab:calibration} bins the held-out set into deciles of predicted
+probability against the observed rate.
+
+
+Calibration is good in the upper half: from the seventh decile up, predicted
+and observed agree closely ($0.801$ against $0.819$, $0.896$ against $0.937$).
+In the middle the model is mildly over-confident about dissatisfaction,
+predicting $0.33$ and $0.49$ in deciles four and five where the observed rates
+are $0.26$ and $0.43$, and the lowest two deciles reverse that. So the model
+separates the classes well at the extremes, where most predictions live, and
+is least trustworthy around $\hat{p} \approx 0.3$--$0.6$, where the evidence
+genuinely is ambiguous.
 
 \begin{table}[htbp]
 \centering
+\small
 \caption{Calibration by decile of predicted probability.}
 \label{tab:calibration}
+\setlength{\tabcolsep}{4pt}
 \begin{tabular}{cccc}
 \toprule
 Decile & Mean predicted & Observed rate & $n$ \\
@@ -114,63 +124,41 @@ Decile & Mean predicted & Observed rate & $n$ \\
 \end{tabular}
 \end{table}
 
-The model is well calibrated in the upper half of the range: from the seventh
-decile upwards predicted and observed rates agree closely ($0.801$ against
-$0.819$, $0.896$ against $0.937$). In the middle it is mildly
-\emph{over}-confident about dissatisfaction, predicting $0.33$ and $0.49$ in
-deciles four and five where the observed rates are $0.26$ and $0.43$. The
-lowest two deciles reverse the direction, with observed rates ($0.122$,
-$0.125$) above the predicted ones ($0.035$, $0.100$).
-
-The practical reading is that the model separates the two classes well at the
-extremes, where most of its predictions live, and is least trustworthy in the
-band around $\hat{p} \approx 0.3$--$0.6$ where the evidence genuinely is
-ambiguous. Any downstream decision quoting a probability from that middle
-range deserves more caution than the AUC alone would suggest.
-
 \subsection{Posterior predictive check by subgroup}
 \label{sec:pred-ppc}
 The checks above compare point predictions against outcomes. A posterior
-predictive check asks a stronger question: if the fitted model is taken
-seriously as a generative description of the data and entire replicated
-datasets are simulated from it, do those replications reproduce features of
-the real data that were never targeted by the fit?
-
-For each posterior draw we simulate replicated satisfaction outcomes for the
-whole held-out set and recompute the satisfaction rate within each level of
-\texttt{Class}, \texttt{Customer Type} and \texttt{Type of Travel}. This gives
-a posterior predictive distribution for each subgroup rate, against which the
-observed rate can be compared.
+predictive check asks more: taking the fitted model seriously as a generative
+description and simulating whole replicated datasets from it, do those
+replications reproduce features of the real data the fit never targeted? For
+each posterior draw we simulate outcomes for the entire held-out set and
+recompute the satisfaction rate within each level of \texttt{Class},
+\texttt{Customer Type} and \texttt{Type of Travel}, giving a posterior
+predictive distribution per subgroup to compare the observed rate against.
 
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=\linewidth]{img/prediction/ppc_subgroups.png}
+\includegraphics[width=0.75\linewidth]{img/prediction/ppc_subgroups.png}
 \caption{Posterior predictive check by subgroup. Densities are the simulated
 satisfaction rates; dashed lines mark the rates actually observed in the
 held-out set.}
 \label{fig:ppc}
 \end{figure}
 
-The observed rates fall inside the bulk of the corresponding simulated
-distributions for every subgroup of all three variables. The model is
-therefore not systematically over- or under-predicting satisfaction for any
-class of customer, on data it has never seen. This is a genuine adequacy
-check rather than a restatement of accuracy: the subgroup rates were never
-fitted directly, so reproducing them is evidence that the covariate effects
-have been captured correctly rather than merely tuned to the aggregate.
+The observed rates fall inside the bulk of the simulated distributions for
+every subgroup of all three variables, so the model is not systematically over-
+or under-predicting satisfaction for any class of customer on data it has
+never seen. The subgroup rates were never fitted directly, so reproducing them
+is evidence that the covariate effects were captured rather than merely tuned
+to the aggregate.
 
 \subsection{Choosing the cutoff by expected loss}
 \label{sec:pred-loss}
-Section~\ref{sec:prediction} deferred the choice of operating point. A
-decision-theoretic treatment settles it properly: instead of picking $0.5$ or
-the ROC-optimal point by convention, we state what the two errors cost and
-minimise posterior expected loss.
-
-Suppose the airline flags a customer as at risk when $\hat{p}_i < t$ and acts
-on that flag with a retention contact. Write $C_{\text{miss}}$ for the cost of
-failing to flag a customer who is in fact dissatisfied, a lost retention
-opportunity, and $C_{\text{waste}}$ for the cost of contacting a customer who
-was satisfied anyway. The expected loss at cutoff $t$ is
+Rather than pick $0.5$ or the ROC-optimal point by convention, we state what
+the two errors cost and minimise posterior expected loss. The airline flags a
+customer when $\hat{p}_i < t$ and follows up with a retention contact; write
+$C_{\text{miss}}$ for the cost of missing a dissatisfied customer and
+$C_{\text{waste}}$ for that of contacting a satisfied one. The expected loss
+at cutoff $t$ is
 \begin{equation}
   \mathcal{L}(t) \;=\;
   C_{\text{miss}} \cdot \mathbb{P}\bigl(\hat{p} \ge t,\; y = 0\bigr)
@@ -178,16 +166,17 @@ was satisfied anyway. The expected loss at cutoff $t$ is
   C_{\text{waste}} \cdot \mathbb{P}\bigl(\hat{p} < t,\; y = 1\bigr),
   \label{eq:loss}
 \end{equation}
-estimated on the held-out set. Only the \emph{ratio} of the two costs matters
-for the location of the optimum, which is convenient: the airline need not put
-a currency figure on either, only state how many wasted contacts it would
-trade for one retained customer.
+estimated on the held-out set. Only the \emph{ratio} of the costs matters, so
+the airline need not price either error, just say how many wasted contacts it
+would trade for one retained customer.
 
 \begin{table}[htbp]
 \centering
+\small
 \caption{Cutoff minimising expected loss, by assumed cost ratio
 $C_{\text{miss}}\!:\!C_{\text{waste}}$.}
 \label{tab:loss}
+\setlength{\tabcolsep}{4pt}
 \begin{tabular}{lcc}
 \toprule
 Cost ratio & Optimal cutoff $t^\star$ & Expected loss \\
@@ -200,16 +189,14 @@ $5\!:\!1$              & 0.80 & 0.287 \\
 \end{table}
 
 Under equal costs the optimum is $t^\star = 0.56$, essentially the base rate
-and close to the conventional $0.5$, which is a useful sanity check on
-Equation~\eqref{eq:loss}. As missing a dissatisfied customer becomes more
-expensive the cutoff rises, to $0.74$ at a $3\!:\!1$ ratio and $0.80$
-at $5\!:\!1$: the airline should flag far more customers, accepting many
-wasted contacts in exchange for catching the recoverable ones.
-
-This is where the Bayesian machinery pays off in operational terms. Because
-the model returns a calibrated distribution rather than a label, the same fit
-supports any cost structure the business cares to specify, and the cutoff
-follows from the loss function instead of being fixed by convention.
+and close to the conventional $0.5$, a useful sanity check on
+Equation~\eqref{eq:loss}. As missing a dissatisfied customer grows more
+expensive the cutoff rises, to $0.74$ at $3\!:\!1$ and $0.80$ at $5\!:\!1$: the
+airline flags far more customers, accepting wasted contacts to catch the
+recoverable ones. This is where the Bayesian machinery pays off operationally.
+Because the model returns a calibrated distribution rather than a label, the
+same fit supports any cost structure the business specifies, and the cutoff
+follows from the loss function instead of convention.
 
 % ==================================================================
 \section{Conclusions}
@@ -220,39 +207,29 @@ first on the reduced covariate set suggested by the brief and then on the full
 set under a horseshoe shrinkage prior, with \texttt{BAS} model averaging as an
 independent cross-check. All posteriors were sampled by MCMC in JAGS.
 
-Three effects dominate and survive every specification. Customer loyalty is
-the strongest by a wide margin and the least shrunk coefficient at every
-global scale tested; \emph{Business} class follows; and among the fourteen
-service items \emph{Inflight entertainment} is the one the prior preserves
-most clearly, while \emph{Inflight wifi service} and \emph{Gate location} are
-heavily shrunk despite sitting in the same correlated clusters. That
-asymmetry is what the horseshoe was chosen for.
+Three effects dominate and survive every specification. Customer loyalty is the
+strongest by a wide margin and the least shrunk coefficient at every global
+scale tested, \emph{Business} class follows, and among the fourteen service
+items \emph{Inflight entertainment} is the one the prior preserves most
+clearly, while \emph{Inflight wifi service} and \emph{Gate location} are
+heavily shrunk despite sitting in the same correlated clusters. That asymmetry
+is what the horseshoe was chosen for.
 
 These conclusions are not artefacts of our modelling choices. The vague-prior
-posterior moves by at most $0.066$ on the log-odds scale across four orders of
-magnitude of prior variance; only one of twenty-two predictors changes its
-signal/noise verdict across a hundred-fold range of the horseshoe's global
-scale, and it sits on the $\kappa = 0.5$ boundary; and refitting on a training
-set twelve times larger moves the coefficients we report by at most $0.022$
-while narrowing the intervals by the factor $\sqrt{n}$ asymptotics predicts.
-Out of sample, on \num{128274} unseen customers, the model reaches an AUC of
-$0.900$ and classifies $82.8\%$ correctly, and the posterior predictive checks
-reproduce the observed satisfaction rate in every subgroup.
+posterior moves by at most $0.066$ across four orders of magnitude of prior
+variance; one predictor of twenty-two changes its signal/noise verdict across a
+hundred-fold range of the global scale, and it sits on the $\kappa = 0.5$
+boundary; and a training set twelve times larger moves the coefficients we
+report by at most $0.022$. Out of sample, on \num{128274} unseen customers, the
+model reaches an AUC of $0.900$, classifies $82.8\%$ correctly, and reproduces
+the observed satisfaction rate in every subgroup.
 
-One result resisted explanation. \emph{Departure/Arrival time convenient}
-carries a negative coefficient whose interval excludes zero. We suspected the
-structural zeros and tested it by refitting without those rows; the effect
-strengthened rather than weakened, so we report it as an open question.
-
-Three limitations are worth naming: the structural zeros were flagged and
-tested but not modelled with a zero-inflated likelihood; $n \approx 1200$ is
-modest for twenty-two predictors, which is why several effects are borderline;
-and the encoding and link choices of Section~\ref{sec:logit} were settled on
-training WAIC without out-of-sample re-validation.
-
-% ---------------------------------------------------------------------
-% TODO before submitting:
-%   - \label{app:bas_vs_hs} must exist on the "BAS vs. Horseshoe" appendix
-%     section, otherwise the forward reference at the top renders as ??
-%   - \num{} requires siunitx, already loaded in main.tex
-% ---------------------------------------------------------------------
+One result resisted explanation: \emph{Departure/Arrival time convenient}
+carries a negative coefficient whose interval excludes zero, and refitting
+without the structural-zero rows strengthened it rather than weakening it, so
+we report it as an open question. Three limitations are worth naming. The
+structural zeros were flagged and tested but not modelled with a zero-inflated
+likelihood; $n \approx 1200$ is modest for twenty-two predictors, which is why
+several effects are borderline; and the encoding and link choices of
+Section~\ref{sec:logit} were settled on training WAIC without out-of-sample
+re-validation.

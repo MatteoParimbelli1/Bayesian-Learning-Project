@@ -20,7 +20,7 @@ meaningful covariates.
 We include all $21$ standardised predictors: the $14$ service-quality items
 plus \texttt{age}, \texttt{flight\_distance}, the two cabin-class dummies
 (\textit{Eco Plus}, \textit{Business}), $\log(1+\texttt{dep\_delay})$,
-\textit{Personal Travel} and \textit{disloyal Customer} - and, as in Section
+\textit{Personal Travel} and \textit{disloyal Customer} -- and, as in Section
 \ref{sec:logit}, the mid-flight delay is kept outside the design matrix with its
 own coefficient $\beta_{\text{arr}}$. The likelihood is again Bernoulli with a
 logit link:
@@ -47,7 +47,7 @@ The horseshoe prior replaces the common vague Gaussian of Section
 where $\mathcal{C}^+(0,1)$ denotes the standard half-Cauchy distribution. The
 global scale $\tau$ pulls \emph{all} coefficients towards zero, enforcing overall
 sparsity, while the heavy Cauchy tails of the local scales $\lambda_j$ let
-individual coefficients escape that shrinkage when the data demand it - this is
+individual coefficients escape that shrinkage when the data demand it -- this is
 precisely the ``a few large, most near zero'' behaviour that makes the prior
 suited to feature selection. The arrival-delay coefficient
 $\beta_{\text{arr}}$ is given its own local scale $\lambda_{\text{arr}}$ under
@@ -75,9 +75,26 @@ Because of the heavy-tailed half-Cauchy hyperpriors, the horseshoe posterior
 mixes more slowly than the vague-prior model of Section \ref{sec:logit}, and it
 is computationally heavier ($22$ coefficients, $22$ local scales and one global
 scale, against the $9$ parameters of Section \ref{sec:logit}). We therefore
-budget a longer sampling run and thinning from the outset; the settings, listed
-in Appendix~\ref{app:mcmc_horseshoe}, are deliberately modest given the
+budget a longer sampling run and thinning from the outset; the settings, reported
+in Table \ref{tab:hs_mcmc_settings}, are deliberately modest given the
 single-core environment and could be extended on a larger machine.
+
+\begin{table}[htbp]
+  \centering
+  \caption{MCMC settings used for the horseshoe model}
+  \label{tab:hs_mcmc_settings}
+  \begin{tabular}{lr}
+    \toprule
+    Setting & Value \\
+    \midrule
+    Chains            & 3 \\
+    Adaptation        & 1500 \\
+    Burn-in           & 1000 \\
+    Iterations (kept) & 5000 \\
+    Thinning          & 3 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
 
 Convergence was assessed separately for the two blocks of parameters, the
 regression coefficients $\{\beta_j, \beta_0, \beta_{\text{arr}}\}$ and the scale
@@ -87,12 +104,30 @@ reduction factors, the effective sample sizes, and the trace and autocorrelation
 plots. The coefficients mix well and show scale-reduction factors close to $1$;
 the scale parameters, and $\tau$ in particular, mix more slowly and show higher
 autocorrelation, as expected for a horseshoe, but reach effective sample sizes
-adequate for the summaries we report. The
-complete diagnostic material - representative trace plots for each block, all
-autocorrelation plots for both the
+adequate for the summaries we report. Figures \ref{fig:hs_trace_beta} and
+\ref{fig:hs_trace_lambda} show a representative trace plot for each block. The
+complete diagnostic material -- all trace and autocorrelation plots for both the
 $\beta$ and the $\lambda$ parameters, together with the full Gelman--Rubin and
-effective-sample-size tables - is collected in Appendix
+effective-sample-size tables -- is collected in Appendix
 \ref{app:mcmc_horseshoe}.
+
+\begin{figure}[!ht]
+  \centering
+  \begin{subfigure}[t]{0.49\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{img/horseshoe_model/trace_beta_1.png}
+    \caption{A subset of the regression coefficients $\beta_j$.}
+    \label{fig:hs_trace_beta}
+  \end{subfigure}\hfill
+  \begin{subfigure}[t]{0.49\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{img/horseshoe_model/trace_lambda_1.png}
+    \caption{The local scales $\lambda_j$ and the global scale $\tau$, which
+             mix more slowly than the coefficients.}
+    \label{fig:hs_trace_lambda}
+  \end{subfigure}
+  \caption{Representative trace plots under the horseshoe prior, three chains.}
+\end{figure}
 
 \subsection{Posterior results}
 Figure \ref{fig:hs_posterior} shows the marginal posterior densities of the
@@ -107,30 +142,29 @@ coefficient scale, as a forest plot of the posterior means and $95\%$ credible
 intervals of the $\beta_j$, colouring in the covariates identified as signal
 ($\kappa_j < 0.5$).
 
-\begin{figure}[htbp]
-\centering
-\begin{subfigure}[t]{0.48\linewidth}
+\begin{figure}[!ht]
   \centering
-  \includegraphics[width=\linewidth]{img/horseshoe_model/post1.png}
-  \caption{Marginal posterior densities of the coefficients under the horseshoe
-           prior ($98\%$ intervals). Most coefficients are shrunk tightly around
-           zero; only a few escape.}
-  \label{fig:hs_posterior}
-\end{subfigure}\hfill
-\begin{subfigure}[t]{0.48\linewidth}
-  \centering
-  \includegraphics[width=\linewidth]{img/horseshoe_model/shrinkage_beta.png}
-  \caption{Posterior distribution of the horseshoe shrinkage weights $\kappa_j$
-           for each predictor. Near $0$ (right) the signal is preserved; near $1$
-           (left) the coefficient is shrunk towards zero. The dashed line marks
-           $\kappa_j = 0.5$.}
-  \label{fig:hs_shrinkage}
-\end{subfigure}
+  \begin{subfigure}[t]{0.49\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{img/horseshoe_model/post1.png}
+    \caption{Marginal posterior densities ($98\%$ intervals). Most coefficients
+             are shrunk tightly around zero; only a few escape.}
+    \label{fig:hs_posterior}
+  \end{subfigure}\hfill
+  \begin{subfigure}[t]{0.49\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{img/horseshoe_model/shrinkage_beta.png}
+    \caption{Shrinkage weights $\kappa_j$. Near $0$ (right) the signal is
+             preserved, near $1$ (left) the coefficient is shrunk; the dashed
+             line marks $\kappa_j = 0.5$.}
+    \label{fig:hs_shrinkage}
+  \end{subfigure}
+  \caption{Coefficients and shrinkage weights under the horseshoe prior.}
 \end{figure}
 
-\begin{figure}[htbp]
+\begin{figure}[!ht]
   \centering
-  \includegraphics[width=0.75\linewidth]{img/horseshoe_model/beta_forest.png}
+  \includegraphics[width=0.85\linewidth]{img/horseshoe_model/beta_forest.png}
   \caption{Posterior coefficients $\beta_j$ under the horseshoe prior (means and
            $95\%$ credible intervals). Blue marks the covariates identified as
            signal ($\kappa_j < 0.5$), grey the shrunk ones.}
@@ -139,7 +173,7 @@ intervals of the $\beta_j$, colouring in the covariates identified as signal
 
 \subsection{Conclusions}
 The horseshoe cleanly separates the informative predictors from the redundant
-ones, and several of its findings sharpen - and in one case reverse - the
+ones, and several of its findings sharpen -- and in one case reverse -- the
 picture from Sections \ref{sec:data_expl} and \ref{sec:logit}.
 
 \paragraph{The booking / connectivity cluster visibly competes.}
@@ -147,7 +181,7 @@ Among the four mutually correlated ``booking / connectivity'' items identified i
 the exploratory analysis (Section \ref{sec:data_expl}), the prior does not treat
 them symmetrically: \textit{Ease of Online booking} and \textit{Online support}
 are preserved noticeably more than \textit{Online boarding} and
-\textit{Inflight wifi service} - the latter being the single most shrunk item in
+\textit{Inflight wifi service} -- the latter being the single most shrunk item in
 the whole model. This is exactly the mechanism the horseshoe was chosen for: when
 several correlated items carry overlapping information, the prior lets two of them
 represent the signal and treats the other two as largely redundant, instead of
@@ -175,7 +209,7 @@ being unimportant.
 
 \paragraph{A cautionary sign on time convenience.}
 More tentatively, \textit{Departure/Arrival time convenient} has a
-\emph{negative} posterior mean with a credible interval excluding zero - higher
+\emph{negative} posterior mean with a credible interval excluding zero -- higher
 ratings associated with \emph{lower} satisfaction, which is counter-intuitive.
 Recall from Section \ref{sec:data_expl} that this item has one of the largest
 shares of structural zeros and sits in its own correlated cluster with
@@ -187,7 +221,7 @@ structural-zero robustness check of Section \ref{sec:robustness}.
 
 \paragraph{Loyalty dominates throughout.}
 Finally, \textit{disloyal Customer} remains, by a wide margin, the single
-strongest and most confidently preserved effect in the entire model - consistent
+strongest and most confidently preserved effect in the entire model -- consistent
 across the exploratory analysis and both models of Sections \ref{sec:logit} and
 \ref{sec:regression}, regardless of how many other covariates are present.
 

@@ -23,14 +23,17 @@ figs/
 # so the Overleaf project can be rebuilt from the repo alone and everyone can
 # read the current report without compiling it (see report_backup/README.md).
 # LaTeX build intermediates are not.
-report_backup/*.aux
-report_backup/*.log
-report_backup/*.out
-report_backup/*.bbl
-report_backup/*.bcf
-report_backup/*.blg
-report_backup/*.toc
-report_backup/*.fls
-report_backup/*.fdb_latexmk
-report_backup/*.run.xml
-report_backup/*.synctex.gz
+report_backup/**/*.aux
+report_backup/**/*.log
+report_backup/**/*.out
+report_backup/**/*.bbl
+report_backup/**/*.bcf
+report_backup/**/*.blg
+report_backup/**/*.toc
+report_backup/**/*.fls
+report_backup/**/*.fdb_latexmk
+report_backup/**/*.run.xml
+report_backup/**/*.synctex.gz
+
+# Working notes, not part of the deliverable
+TODO.md
