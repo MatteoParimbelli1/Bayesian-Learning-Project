@@ -5,6 +5,7 @@
 codex/
 .RDataTmp
 .DS_Store
+.Rapp.history
 
 # Knitted output — regenerate by knitting the .Rmd, don't commit
 *.html
@@ -14,7 +15,22 @@ codex/
 fits/
 *_cache/
 
-# report build intermediates (keep report.pdf itself)
-report/report_files/
-report/*.tex
-report/*.knit.md
+# Figures as the notebooks write them. The copies the report actually uses
+# live in report_backup/img/, so these are regenerable output, not sources.
+figs/
+
+# Report backup: LaTeX sources and figures are tracked, so the Overleaf
+# project can be rebuilt from the repo alone (see report_backup/README.md).
+# Build output is not.
+report_backup/*.pdf
+report_backup/*.aux
+report_backup/*.log
+report_backup/*.out
+report_backup/*.bbl
+report_backup/*.bcf
+report_backup/*.blg
+report_backup/*.toc
+report_backup/*.fls
+report_backup/*.fdb_latexmk
+report_backup/*.run.xml
+report_backup/*.synctex.gz

@@ -1,4 +1,4 @@
-suppressMessages({library(rjags); library(coda); library(here)})
+suppressMessages({library(rjags); library(coda)})
 set.seed(123)
 
 ## ---------------------------------------------------------------------------
@@ -18,7 +18,21 @@ set.seed(123)
 ## The LOCAL scales lambda[j] keep the standard C+(0,1) as in Section 03.
 ## ---------------------------------------------------------------------------
 
-train <- read.csv(here("project/data/airline_train_n1200.csv"), stringsAsFactors = FALSE)
+## Paths are resolved relative to this script's own location, so it can be run
+## from anywhere:  Rscript deliver/horseshoe_prior_sweep.R
+.args <- commandArgs(trailingOnly = FALSE)
+.file <- sub("^--file=", "", .args[grep("^--file=", .args)])
+# Rscript encodes spaces in --file= as "~+~", which breaks the path on any
+# machine whose repo lives under e.g. "My Drive". Decode them back.
+.file <- gsub("~\\+~", " ", .file)
+root  <- if (length(.file)) {
+  normalizePath(file.path(dirname(.file), ".."))
+} else {
+  normalizePath("..")   # fallback: sourced interactively from deliver/
+}
+
+train <- read.csv(file.path(root, "data/airline_train_n1200.csv"),
+                  stringsAsFactors = FALSE)
 train$y <- as.integer(train$satisfaction == "satisfied")
 std <- function(x) as.numeric(scale(x))
 
@@ -38,8 +52,11 @@ Class_Business <- as.integer(train$cabin_class == "Business")
 TypeTravel_Personal <- as.integer(train$travel_type == "Personal Travel")
 CustType_disloyal   <- as.integer(train$customer_type == "disloyal Customer")
 
-X_extra <- cbind(logdep_std, Age_std, FlightDist_std, Class_EcoPlus, Class_Business,
-                 TypeTravel_Personal, CustType_disloyal)
+## Column order must match term_labels below, i.e. X_extra in
+## 03_feature_selection.Rmd: Age, Flight Distance, Eco Plus, Business,
+## log dep delay, Personal Travel, disloyal Customer.
+X_extra <- cbind(Age_std, FlightDist_std, Class_EcoPlus, Class_Business,
+                 logdep_std, TypeTravel_Personal, CustType_disloyal)
 X_full <- cbind(X_service, X_extra)
 P <- ncol(X_full)
 
@@ -120,5 +137,6 @@ for (s in global_scales) {
   results[[as.character(s)]] <- fit_scale(s)
 }
 
-saveRDS(results, here("/project/data/sensitivity/horseshoe_prior_sweep_results.rds"))
+out_dir <- file.path(root, "data")
+saveRDS(results, file.path(out_dir, "04b_horseshoe_sweep.rds"))
 cat(format(Sys.time()), "DONE\n")

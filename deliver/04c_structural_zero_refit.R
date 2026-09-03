@@ -1,15 +1,29 @@
 suppressMessages({library(rjags); library(coda)})
 set.seed(123)
 
-train <- read.csv("airline_train_n1200.csv", stringsAsFactors = FALSE)
+## Paths are resolved relative to this script's own location, so it can be run
+## from anywhere:  Rscript deliver/04c_structural_zero_refit.R
+.args <- commandArgs(trailingOnly = FALSE)
+.file <- sub("^--file=", "", .args[grep("^--file=", .args)])
+# Rscript encodes spaces in --file= as "~+~", which breaks the path on any
+# machine whose repo lives under e.g. "My Drive". Decode them back.
+.file <- gsub("~\\+~", " ", .file)
+root  <- if (length(.file)) {
+  normalizePath(file.path(dirname(.file), ".."))
+} else {
+  normalizePath("..")   # fallback: sourced interactively from deliver/
+}
+
+train <- read.csv(file.path(root, "data/airline_train_n1200.csv"),
+                  stringsAsFactors = FALSE)
 train$y <- as.integer(train$satisfaction == "satisfied")
 std <- function(x) as.numeric(scale(x))
 
-service_items <- c("Seat.comfort", "Departure.Arrival.time.convenient", "Food.and.drink",
-                    "Gate.location", "Inflight.wifi.service", "Inflight.entertainment",
-                    "Online.support", "Ease.of.Online.booking", "On.board.service",
-                    "Leg.room.service", "Baggage.handling", "Checkin.service",
-                    "Cleanliness", "Online.boarding")
+service_items <- c("seat_comfort", "time_convenient", "food_drink",
+                    "gate_location", "wifi", "entertainment",
+                    "online_support", "ease_booking", "onboard_service",
+                    "legroom", "baggage", "checkin",
+                    "cleanliness", "online_boarding")
 
 # Exclude structural-zero flagged rows (same flag definition as Section 00)
 zero_share <- sapply(train[, service_items], function(x) mean(x == 0))
@@ -20,19 +34,26 @@ cat("Excluding", sum(flag), "structural-zero rows out of", nrow(train), "\n")
 sub <- train[!flag, ]
 
 X_service <- apply(sub[, service_items], 2, std)
-logDepDelay    <- log1p(sub$Departure.Delay.in.Minutes)
-signedLogArr   <- sign(sub$ArrivalDelay.Residual) * log1p(abs(sub$ArrivalDelay.Residual))
-Age_std         <- std(sub$Age)
-FlightDist_std  <- std(sub$Flight.Distance)
+logDepDelay    <- log1p(sub$dep_delay)
+Age_std         <- std(sub$age)
+FlightDist_std  <- std(sub$flight_distance)
 logDepDelay_std <- std(logDepDelay)
-obs  <- !is.na(signedLogArr)
-mu_a <- mean(signedLogArr[obs]); sd_a <- sd(signedLogArr[obs])
-arr_delay_std <- (signedLogArr - mu_a) / sd_a
 
-Class_EcoPlus  <- as.integer(sub$Class == "Eco Plus")
-Class_Business <- as.integer(sub$Class == "Business")
-TypeTravel_Personal <- as.integer(sub$Type.of.Travel == "Personal Travel")
-CustType_disloyal   <- as.integer(sub$Customer.Type == "disloyal Customer")
+# Use the SAME delay term as the main model (03_feature_selection.Rmd) and the
+# prior sweep, i.e. log_mid_delay, the signed log of the arrival-minus-departure
+# difference. This script previously used arr_delay_res, the regression residual,
+# which is the alternative the appendix explicitly rejected. The two are not the
+# same covariate (cor(log_dep_delay, log_mid_delay) = -0.39), so using the
+# residual here meant the robustness check was testing a different model from
+# the one it is supposed to be checking.
+obs  <- !is.na(sub$log_mid_delay)
+mu_a <- mean(sub$log_mid_delay[obs]); sd_a <- sd(sub$log_mid_delay[obs])
+arr_delay_std <- (sub$log_mid_delay - mu_a) / sd_a
+
+Class_EcoPlus  <- as.integer(sub$cabin_class == "Eco Plus")
+Class_Business <- as.integer(sub$cabin_class == "Business")
+TypeTravel_Personal <- as.integer(sub$travel_type == "Personal Travel")
+CustType_disloyal   <- as.integer(sub$customer_type == "disloyal Customer")
 
 X_extra <- cbind(Age_std, FlightDist_std, Class_EcoPlus, Class_Business,
                   logDepDelay_std, TypeTravel_Personal, CustType_disloyal)
@@ -82,12 +103,15 @@ term_labels <- c("beta[1]"="Seat comfort","beta[2]"="Dep/Arr time convenient","b
 "beta[10]"="Leg room service","beta[11]"="Baggage handling","beta[12]"="Checkin service",
 "beta[13]"="Cleanliness","beta[14]"="Online boarding","beta[15]"="Age","beta[16]"="Flight Distance",
 "beta[17]"="Class: Eco Plus","beta[18]"="Class: Business","beta[19]"="log(1+Departure Delay)",
-"beta[20]"="Personal Travel","beta[21]"="disloyal Customer","beta_arr"="Arrival delay residual")
+"beta[20]"="Personal Travel","beta[21]"="disloyal Customer",
+# was "Arrival delay residual"; the model now uses log_mid_delay, matching
+# 03_feature_selection.Rmd and horseshoe_prior_sweep.R
+"beta_arr"="Mid-flight delay (signed log)")
 
 result_tbl <- data.frame(term = term_labels[beta_cols], kappa = round(post_kappa[beta_cols],3),
                           beta_mean = round(post_beta,3), beta_lo = round(beta_ci[1,],3), beta_hi = round(beta_ci[2,],3))
 print(result_tbl[order(result_tbl$kappa),], row.names = FALSE)
 
 saveRDS(list(result_tbl = result_tbl, n_excluded = sum(flag), n_remaining = nrow(sub)),
-        "structural_zero_refit_results.rds")
+        file.path(root, "data/04c_structural_zero_refit.rds"))
 cat(format(Sys.time()), "DONE\n")
