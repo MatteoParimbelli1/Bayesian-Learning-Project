@@ -145,6 +145,79 @@ cat("\nComparison (positive elpd_diff favors the row):\n"); print(cmp_encoding)
 
 The dummy encoding has the lower WAIC (`r sprintf("%.1f", w_dummy$estimates["waic","Estimate"])` vs `r sprintf("%.1f", w_ordinal$estimates["waic","Estimate"])`), though by less than 2 standard errors of the difference -- a real but modest preference, not an overwhelming one. Given `Class` is nominal rather than genuinely equally-spaced ordinal, and the dummy encoding is both the more flexible specification and the one that will let us report a separate, directly interpretable odds ratio per class, we adopt it going forward.
 
+### 1.2 Out-of-sample re-validation of the encoding choice
+
+The comparison above is an *in-sample* criterion computed on the same n = 1200 rows used to fit both models. Before treating it as final, we score both fits on the held-out test set using the posterior draws we already have -- no new MCMC required, just posterior-mean predicted probabilities against the outcome the models never saw.
+
+```{r encoding-oos-validate, cache=TRUE}
+# Held-out test set, same preprocessing pipeline as the training file --
+# adjust the path / column names below if your test export differs
+test <- read.csv("../data/airline_test_holdout.csv", stringsAsFactors = FALSE)
+test$y <- as.integer(test$satisfaction == "satisfied")
+
+# Standardize test covariates using TRAINING mean/sd -- never re-scale on test data
+std_with <- function(x, m, s) (x - m) / s
+
+Age_std_test        <- std_with(test$age, mean(train$age), sd(train$age))
+Seat_std_test       <- std_with(test$seat_comfort, mean(train$seat_comfort), sd(train$seat_comfort))
+FlightDist_std_test <- std_with(test$flight_distance, mean(train$flight_distance), sd(train$flight_distance))
+logdep_std_test     <- std_with(test$log_dep_delay, mean(train$log_dep_delay), sd(train$log_dep_delay))
+logmid_test         <- std_with(test$log_mid_delay, mean(train$log_mid_delay), sd(train$log_mid_delay))
+
+TypeTravel_Personal_test <- as.integer(test$travel_type == "Personal Travel")
+CustType_disloyal_test   <- as.integer(test$customer_type == "disloyal Customer")
+
+Class_EcoPlus_test  <- as.integer(test$cabin_class == "Eco Plus")
+Class_Business_test <- as.integer(test$cabin_class == "Business")
+
+class_int_train <- as.integer(factor(train$cabin_class, levels = c("Eco", "Eco Plus", "Business"), ordered = TRUE))
+class_int_test  <- as.integer(factor(test$cabin_class,  levels = c("Eco", "Eco Plus", "Business"), ordered = TRUE))
+Class_score_std_test <- std_with(class_int_test, mean(class_int_train), sd(class_int_train))
+
+X_dummy_test   <- cbind(Age_std_test, Seat_std_test, FlightDist_std_test,
+                        Class_EcoPlus_test, Class_Business_test,
+                        logdep_std_test, TypeTravel_Personal_test, CustType_disloyal_test)
+X_ordinal_test <- cbind(Age_std_test, Seat_std_test, FlightDist_std_test, Class_score_std_test,
+                        logdep_std_test, TypeTravel_Personal_test, CustType_disloyal_test)
+
+# Posterior-mean predicted probability on the test set, averaged over the MCMC
+# draws we already have -- reuses fit_dummy_logit / fit_ordinal_logit from 1.1
+predict_p <- function(fit, X, arr_delay) {
+  sm         <- as.matrix(fit)
+  beta0_dr   <- sm[, "beta0"]
+  beta_dr    <- sm[, grep("^beta\\[", colnames(sm)), drop = FALSE]
+  betaarr_dr <- sm[, "beta_arr"]
+  eta <- beta0_dr + beta_dr %*% t(X) + outer(betaarr_dr, arr_delay)
+  colMeans(plogis(eta))
+}
+
+p_dummy_test   <- predict_p(fit_dummy_logit,   X_dummy_test,   logmid_test)
+p_ordinal_test <- predict_p(fit_ordinal_logit, X_ordinal_test, logmid_test)
+
+# Out-of-sample scoring: log-loss, Brier score, AUC (rank-based, no extra package)
+auc_manual <- function(p, y) {
+  r  <- rank(p)
+  n1 <- as.numeric(sum(y == 1))
+  n0 <- as.numeric(sum(y == 0))
+  (sum(r[y == 1]) - n1 * (n1 + 1) / 2) / (n1 * n0)
+}
+
+oos_metrics <- function(p, y) {
+  eps <- 1e-9
+  p <- pmin(pmax(p, eps), 1 - eps)
+  c(log_loss = -mean(y * log(p) + (1 - y) * log(1 - p)),
+    brier    = mean((p - y)^2),
+    auc      = auc_manual(p, y))
+}
+
+oos_cmp <- rbind(
+  dummy   = oos_metrics(p_dummy_test,   test$y),
+  ordinal = oos_metrics(p_ordinal_test, test$y)
+)
+knitr::kable(round(oos_cmp, 4))
+```
+
+
 ## 2. MCMC diagnostic
 
 ```{r diagnostics}
