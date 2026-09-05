@@ -63,20 +63,18 @@ in Appendix~\ref{app:data_aug}.
 
 \subsection{Dataset exploration}
 \label{sec:data_expl}
-We begin our exploration by examining the balance of the target variable for the prediction model. As shown in Fig.~\ref{img:sat_balance}, the two classes are fairly balanced, so the use of models more complex than a Bernoulli probability distribution is not justified and will not be pursued.
-\begin{figure}[h]
-    \centering
-    \includegraphics[width=0.4\linewidth]{img/data_expl/sat_balance.png}
-    \caption{Target variable class balance}
-    \label{img:sat_balance}
-\end{figure}
+We begin our exploration by examining the balance of the target variable for the
+prediction model. The two classes are close to even --- $54.7\%$ satisfied
+against $45.3\%$ dissatisfied (Tab.~\ref{tab:class_balance}) --- so the use of
+models more complex than a Bernoulli probability distribution is not justified
+and will not be pursued.
 
 To obtain a first indication of the relationship between the response variable and the remaining covariates, we examine their correlation, as shown in Fig.~\ref{img:full_corr}. Focusing on the service-quality variables (Fig.~\ref{img:qs_corr}), we can distinguish three subgroups of features. The correlation is computed using R's \texttt{corr()} function, which is based on Pearson's correlation coefficient
 $$
 r_{X,Y} = \frac{\sum (x_i - \bar{x})(y_i - \bar{y})}
                {\sqrt{\sum (x_i - \bar{x})^2 \sum (y_i - \bar{y})^2}}
 $$
-\begin{figure}
+\begin{figure}[htbp]
     \centering
     \begin{subfigure}[t]{.48\textwidth}
         \centering
@@ -96,6 +94,7 @@ $$
 
 Tab.~\ref{tab:class_balance} reports the class balance of the remaining categorical variables. Given the class imbalance of some covariates, we decided to stratify the train--test split of the dataset.
 \begin{table}[htbp] 
+\small
   \centering
   \caption{Class balance of the categorical covariates}
   \label{tab:class_balance}

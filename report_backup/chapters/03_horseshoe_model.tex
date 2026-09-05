@@ -69,6 +69,7 @@ in Table \ref{tab:hs_mcmc_settings}, are deliberately modest given the
 single-core environment at our disposale and could be extended on a more performative machine.
 
 \begin{table}[htbp]
+\small
   \centering
   \caption{MCMC settings used for the horseshoe model}
   \label{tab:hs_mcmc_settings}
@@ -105,54 +106,53 @@ scales are identified and their consequences discussed.
 
 \begin{figure}[!ht]
   \centering
-  \begin{subfigure}[t]{0.30\linewidth}
+  \begin{minipage}[c]{0.343\linewidth}
     \centering
-    \includegraphics[width=\linewidth]{img/horseshoe_model/trace_beta_1.png}
-    \caption{A subset of the regression coefficients $\beta_j$.}
-    \label{fig:hs_trace_beta}
-  \end{subfigure}\hfill
-  \begin{subfigure}[t]{0.30\linewidth}
+    \begin{subfigure}[b]{\linewidth}
+      \centering
+      \includegraphics[width=\linewidth]{img/horseshoe_model/trace_beta_1.png}
+      \caption{A subset of the regression coefficients $\beta_j$.}
+      \label{fig:hs_trace_beta}
+    \end{subfigure}
+
+    \vspace{0.6em}
+
+    \begin{subfigure}[b]{\linewidth}
+      \centering
+      \includegraphics[width=\linewidth]{img/horseshoe_model/trace_lambda_1.png}
+      \caption{The local scales $\lambda_j$ and the global scale $\tau$, which
+               mix more slowly than the coefficients.}
+      \label{fig:hs_trace_lambda}
+    \end{subfigure}
+  \end{minipage}
+  \hfill
+  \begin{minipage}[c]{0.637\linewidth}
     \centering
-    \includegraphics[width=\linewidth]{img/horseshoe_model/trace_lambda_1.png}
-    \caption{The local scales $\lambda_j$ and the global scale $\tau$, which
-             mix more slowly than the coefficients.}
-    \label{fig:hs_trace_lambda}
-  \end{subfigure}
-  \caption{Representative trace plots under the horseshoe prior, three chains.}
+    \begin{subfigure}[b]{\linewidth}
+      \centering
+      \includegraphics[width=\linewidth]{img/horseshoe_model/post1.png}
+      \caption{Marginal posterior densities of the coefficients.}
+      \label{fig:hs_posterior}
+    \end{subfigure}
+  \end{minipage}
+  \caption{Representative trace plots under the horseshoe prior (three chains,
+           left) and the resulting marginal posteriors (right).}
 \end{figure}
 
 \subsection{Posterior results}
 Figure \ref{fig:hs_posterior} shows the marginal posterior densities of the
 coefficients: most concentrate tightly around zero, with only a handful clearly
 displaced, which is the visual signature of the shrinkage at work. The relevance
-ranking is made explicit in Figure \ref{fig:hs_shrinkage}, which plots the
-posterior distribution of the shrinkage weights $\kappa_j$ of
-Eq.~\eqref{eq:kappa}: predictors on the ``signal'' side ($\kappa_j$ small) are
-the ones the model retains, while those pushed to $\kappa_j \to 1$ are treated as
-redundant. Figure \ref{fig:hs_forest} reports the same information on the
+ranking is made explicit by the shrinkage weights $\kappa_j$ of
+Eq.~\eqref{eq:kappa}, plotted in Appendix~\ref{app:hs_shrinkage}: predictors on
+the ``signal'' side ($\kappa_j$ small) are the ones the model retains, while
+those pushed to $\kappa_j \to 1$ are treated as redundant.
+Figure \ref{fig:hs_forest} reports the same information on the
 coefficient scale, as a forest plot of the posterior means and $95\%$ credible
 intervals of the $\beta_j$, colouring in the covariates identified as signal
 ($\kappa_j < 0.5$).
 
-\begin{figure}[!ht]
-  \centering
-  \begin{subfigure}[t]{0.49\linewidth}
-    \centering
-    \includegraphics[width=\linewidth]{img/horseshoe_model/post1.png}
-    \caption{Marginal posterior densities ($98\%$ intervals). Most coefficients
-             are shrunk tightly around zero; only a few escape.}
-    \label{fig:hs_posterior}
-  \end{subfigure}\hfill
-  \begin{subfigure}[t]{0.49\linewidth}
-    \centering
-    \includegraphics[width=\linewidth]{img/horseshoe_model/shrinkage_beta.png}
-    \caption{Shrinkage weights $\kappa_j$. Near $0$ (right) the signal is
-             preserved, near $1$ (left) the coefficient is shrunk; the dashed
-             line marks $\kappa_j = 0.5$.}
-    \label{fig:hs_shrinkage}
-  \end{subfigure}
-  \caption{Coefficients and shrinkage weights under the horseshoe prior.}
-\end{figure}
+
 
 \begin{figure}[!ht]
   \centering

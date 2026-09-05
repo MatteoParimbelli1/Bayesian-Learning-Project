@@ -51,6 +51,7 @@ Table~\ref{tab:prior-range} reports, for each coefficient, the range
 (max $-$ min) of its posterior mean across the four prior variances.
 
 \begin{table}[htbp]
+\small
 \centering
 \caption{Range of posterior means across the four prior variances
 (rows are ordered by decreasing range in the notebook).}
@@ -119,6 +120,7 @@ ordered by shrinkage weight at the default scale.}
 \end{figure}
 
 \begin{table}[htbp]
+\small
 \centering
 \caption{Largest movement of the posterior mean across the three global
 scales (top eight predictors).}
@@ -142,101 +144,30 @@ Baggage handling               & 0.008 \\
 % ------------------------------------------------------------------
 \subsubsection{Shrinkage weights and signal/noise stability}
 % ------------------------------------------------------------------
-Table~\ref{tab:hs-kappa} gives the posterior shrinkage weight
-$\kappa_j$ for every predictor at each global scale, and
-Table~\ref{tab:hs-signal} turns each $\kappa_j$ into a signal/noise
-verdict ($\kappa_j < 0.5 \Rightarrow$ signal), flagging as
-\texttt{stable} the predictors that keep the same verdict at all three
-scales.
+Turning each $\kappa_j$ into a verdict ($\kappa_j < 0.5 \Rightarrow$ signal)
+lets us ask the sharper question: does the global scale change \emph{which}
+covariates the model keeps? Across a hundred-fold range of $s$, two of the
+$22$ predictors change their classification --- \texttt{Online support} and
+\texttt{Cleanliness}, both of which sit within $0.02$ of the $\kappa = 0.5$
+boundary at the default scale and so flip on the smallest movement. The other
+twenty keep the same verdict throughout. The eleven the model calls signal at
+$s = 1$ --- \texttt{disloyal Customer}, \texttt{Inflight entertainment},
+\texttt{Class: Business}, \texttt{Personal Travel}, \texttt{Seat comfort},
+\texttt{On-board service}, \texttt{Ease of Online booking},
+\texttt{Dep/Arr time convenient}, \texttt{Checkin service},
+\texttt{Leg room service} and \texttt{Food and drink} --- are the same eleven
+at $s = 0.1$ and at $s = 10$, apart from the two boundary cases.
 
-\begin{table}[htbp]
-\centering
-\caption{Posterior shrinkage weight $\kappa_j$ at each global scale
-(one row per predictor; 22 predictors in total).}
-\label{tab:hs-kappa}
-\begin{tabular}{lccc}
-\toprule
-Term & $s = 0.1$ & $s = 1$ & $s = 10$ \\
-\midrule
-disloyal Customer              & 0.050 & 0.070 & 0.076 \\
-Inflight entertainment         & 0.128 & 0.171 & 0.181 \\
-Class: Business                & 0.134 & 0.184 & 0.192 \\
-Personal Travel                & 0.314 & 0.349 & 0.354 \\
-Seat comfort                   & 0.322 & 0.366 & 0.382 \\
-On-board service               & 0.302 & 0.367 & 0.375 \\
-Ease of Online booking         & 0.364 & 0.403 & 0.434 \\
-Dep/Arr time convenient        & 0.363 & 0.419 & 0.431 \\
-Checkin service                & 0.363 & 0.428 & 0.437 \\
-Leg room service               & 0.394 & 0.444 & 0.462 \\
-Food and drink                 & 0.446 & 0.483 & 0.491 \\
-Online support                 & 0.467 & 0.515 & 0.525 \\
-Cleanliness                    & 0.498 & 0.541 & 0.555 \\
-Class: Eco Plus                & 0.647 & 0.658 & 0.680 \\
-Baggage handling               & 0.688 & 0.700 & 0.699 \\
-log(1+Departure Delay)         & 0.686 & 0.702 & 0.715 \\
-Inflight wifi service          & 0.704 & 0.709 & 0.716 \\
-Online boarding                & 0.718 & 0.734 & 0.742 \\
-Gate location                  & 0.736 & 0.755 & 0.763 \\
-Age                            & 0.751 & 0.761 & 0.753 \\
-Mid-flight delay (signed log)  & 0.762 & 0.762 & 0.791 \\
-Flight Distance                & 0.754 & 0.763 & 0.768 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\begin{table}[htbp]
-\centering
-\caption{Signal ($\kappa_j < 0.5$) at each global scale; \texttt{stable}
-indicates the same verdict across all three scales.}
-\label{tab:hs-signal}
-\begin{tabular}{lcccc}
-\toprule
-Term & $s = 0.1$ & $s = 1$ & $s = 10$ & stable \\
-\midrule
-disloyal Customer              & yes & yes & yes & \checkmark \\
-Inflight entertainment         & yes & yes & yes & \checkmark \\
-Class: Business                & yes & yes & yes & \checkmark \\
-Personal Travel                & yes & yes & yes & \checkmark \\
-Seat comfort                   & yes & yes & yes & \checkmark \\
-On-board service               & yes & yes & yes & \checkmark \\
-Ease of Online booking         & yes & yes & yes & \checkmark \\
-Dep/Arr time convenient        & yes & yes & yes & \checkmark \\
-Checkin service                & yes & yes & yes & \checkmark \\
-Leg room service               & yes & yes & yes & \checkmark \\
-Food and drink                 & yes & yes & yes & \checkmark \\
-Online support                 & yes & no  & no  &  \\
-Cleanliness                    & yes & no  & no  &  \\
-Class: Eco Plus                & no  & no  & no  & \checkmark \\
-Baggage handling               & no  & no  & no  & \checkmark \\
-log(1+Departure Delay)         & no  & no  & no  & \checkmark \\
-Inflight wifi service          & no  & no  & no  & \checkmark \\
-Online boarding                & no  & no  & no  & \checkmark \\
-Gate location                  & no  & no  & no  & \checkmark \\
-Age                            & no  & no  & no  & \checkmark \\
-Mid-flight delay (signed log)  & no  & no  & no  & \checkmark \\
-Flight Distance                & no  & no  & no  & \checkmark \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-Across a hundred-fold range of the global scale, two of the
-$22$ predictors change their signal/noise classification. The covariates
-the model calls signal at the default scale ($s = 1$) ---
-\texttt{disloyal Customer}, \texttt{Inflight entertainment},
-\texttt{Class: Business}, \texttt{On-board service},
-\texttt{Personal Travel}, \texttt{Seat comfort},
-\texttt{Ease of Online booking}, \texttt{Checkin service},
-\texttt{Dep/Arr time convenient}, \texttt{Leg room service} and
-\texttt{Food and drink} --- are largely preserved across scales,
-and the largest shift in any posterior mean is $0.036$ on
-the log-odds scale. The strong effects identified in Section~03
-(\texttt{disloyal Customer}, \texttt{Personal Travel},
-\texttt{Seat comfort}) stay strong and confidently non-zero regardless
-of $s$; only the coefficients already sitting near the $\kappa = 0.5$
-boundary drift, which is exactly where sensitivity to the global scale
-is expected and where we drew no firm conclusions in the first place.
-The headline reading of Section~03 is therefore not an artefact of the
-particular half-Cauchy scale we chose.
+The strong effects of Section~\ref{sec:regression}
+(\texttt{disloyal Customer}, \texttt{Personal Travel}, \texttt{Seat comfort})
+stay strong and confidently non-zero regardless of $s$, and the largest shift
+in any posterior mean is $0.036$ on the log-odds scale. Only the coefficients
+already sitting near the boundary drift, which is exactly where sensitivity to
+the global scale is expected and where we drew no firm conclusions in the first
+place. The headline reading of Section~\ref{sec:regression} is therefore not an
+artefact of the particular half-Cauchy scale we chose. The full
+$\kappa_j$ values at each scale, and the verdict table they produce, are in
+Appendix~\ref{app:hs_shrinkage}.
 
 % ==================================================================
 \subsection{Structural-zero robustness check}
@@ -255,6 +186,7 @@ compares the ``seat/catering/ground'' cluster with and without the
 ambiguous rows.
 
 \begin{table}[htbp]
+\small
 \centering
 \caption{Horseshoe refit excluding structural-zero rows.}
 \label{tab:structzero}
@@ -347,6 +279,7 @@ leave-one-out cross-validation (PSIS-LOO), computed from the same pointwise
 log-likelihood draws already collected for each fit.
 
 \begin{table}[h]
+\small
 \centering
 \begin{tabular}{lccc}
 \hline

@@ -45,6 +45,17 @@
 \captionsetup{font=small,labelfont={bf,color=polinavy},
               labelsep=period,skip=5pt}
 
+%---------------- Float placement -----------------------------
+% Defaults let LaTeX bail out to a dedicated float page as soon as the
+% deferred floats fill half a page (\floatpagefraction=0.5). Ch.1 ends with a
+% ~9.7cm figure and a ~5.5cm table and no trailing text, which trips exactly
+% that rule and strands both on a page of their own. Raising the threshold
+% above their combined height makes LaTeX set them at the top of a text page.
+\renewcommand{\topfraction}{0.9}
+\renewcommand{\bottomfraction}{0.8}
+\renewcommand{\textfraction}{0.07}
+\renewcommand{\floatpagefraction}{0.8}
+
 %---------------- Headers / footers ---------------------------
 \pagestyle{fancy}
 \fancyhf{}
@@ -110,7 +121,7 @@ and PSIS-LOO, and validate the selected model on a held-out set of
 \newpage
 \pagenumbering{arabic}
 
-\include{chapters/00_prob_desc_data_expl}
+\input{chapters/00_prob_desc_data_expl}
 \input{chapters/01_model}
 \input{chapters/02_logit_model}
 \input{chapters/03_horseshoe_model}

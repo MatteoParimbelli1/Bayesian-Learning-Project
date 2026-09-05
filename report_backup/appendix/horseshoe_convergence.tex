@@ -302,3 +302,97 @@ third decimal of any single $\kappa_j$, and
 Section~\ref{sec:sens-horseshoe} shows the verdicts are stable across a
 hundred-fold change in the global scale. The global scale $\tau$ itself mixes
 well (PSRF $1.00$, ESS \num{4515}).
+
+% ==================================================================
+\section{Horseshoe shrinkage weights} \label{app:hs_shrinkage}
+% ==================================================================
+The shrinkage weight $\kappa_j = 1/(1+\lambda_j^2)$ of Eq.~\eqref{eq:kappa}
+measures how hard the prior pulls each coefficient towards zero: near $0$ the
+signal is preserved, near $1$ the coefficient is treated as redundant.
+Figure~\ref{fig:hs_shrinkage} shows the posterior distribution of each
+$\kappa_j$ at the default global scale, supporting the relevance ranking of
+Section~\ref{sec:regression}. Tables~\ref{tab:hs-kappa}
+and~\ref{tab:hs-signal} give the values and the resulting verdicts at each of
+the three global scales tested in Section~\ref{sec:sens-horseshoe}.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.62\linewidth]{img/horseshoe_model/shrinkage_beta.png}
+  \caption{Posterior shrinkage weights $\kappa_j$ under the horseshoe prior at
+           the default global scale. Near $0$ (right) the signal is preserved,
+           near $1$ (left) the coefficient is shrunk; the dashed line marks
+           $\kappa_j = 0.5$.}
+  \label{fig:hs_shrinkage}
+\end{figure}
+
+\begin{table}[htbp]
+\small
+\centering
+\caption{Posterior shrinkage weight $\kappa_j$ at each global scale
+(one row per predictor; 22 predictors in total).}
+\label{tab:hs-kappa}
+\begin{tabular}{lccc}
+\toprule
+Term & $s = 0.1$ & $s = 1$ & $s = 10$ \\
+\midrule
+disloyal Customer              & 0.050 & 0.070 & 0.076 \\
+Inflight entertainment         & 0.128 & 0.171 & 0.181 \\
+Class: Business                & 0.134 & 0.184 & 0.192 \\
+Personal Travel                & 0.314 & 0.349 & 0.354 \\
+Seat comfort                   & 0.322 & 0.366 & 0.382 \\
+On-board service               & 0.302 & 0.367 & 0.375 \\
+Ease of Online booking         & 0.364 & 0.403 & 0.434 \\
+Dep/Arr time convenient        & 0.363 & 0.419 & 0.431 \\
+Checkin service                & 0.363 & 0.428 & 0.437 \\
+Leg room service               & 0.394 & 0.444 & 0.462 \\
+Food and drink                 & 0.446 & 0.483 & 0.491 \\
+Online support                 & 0.467 & 0.515 & 0.525 \\
+Cleanliness                    & 0.498 & 0.541 & 0.555 \\
+Class: Eco Plus                & 0.647 & 0.658 & 0.680 \\
+Baggage handling               & 0.688 & 0.700 & 0.699 \\
+log(1+Departure Delay)         & 0.686 & 0.702 & 0.715 \\
+Inflight wifi service          & 0.704 & 0.709 & 0.716 \\
+Online boarding                & 0.718 & 0.734 & 0.742 \\
+Gate location                  & 0.736 & 0.755 & 0.763 \\
+Age                            & 0.751 & 0.761 & 0.753 \\
+Mid-flight delay (signed log)  & 0.762 & 0.762 & 0.791 \\
+Flight Distance                & 0.754 & 0.763 & 0.768 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+\small
+\centering
+\caption{Signal ($\kappa_j < 0.5$) at each global scale; \texttt{stable}
+indicates the same verdict across all three scales.}
+\label{tab:hs-signal}
+\begin{tabular}{lcccc}
+\toprule
+Term & $s = 0.1$ & $s = 1$ & $s = 10$ & stable \\
+\midrule
+disloyal Customer              & yes & yes & yes & \checkmark \\
+Inflight entertainment         & yes & yes & yes & \checkmark \\
+Class: Business                & yes & yes & yes & \checkmark \\
+Personal Travel                & yes & yes & yes & \checkmark \\
+Seat comfort                   & yes & yes & yes & \checkmark \\
+On-board service               & yes & yes & yes & \checkmark \\
+Ease of Online booking         & yes & yes & yes & \checkmark \\
+Dep/Arr time convenient        & yes & yes & yes & \checkmark \\
+Checkin service                & yes & yes & yes & \checkmark \\
+Leg room service               & yes & yes & yes & \checkmark \\
+Food and drink                 & yes & yes & yes & \checkmark \\
+Online support                 & yes & no  & no  &  \\
+Cleanliness                    & yes & no  & no  &  \\
+Class: Eco Plus                & no  & no  & no  & \checkmark \\
+Baggage handling               & no  & no  & no  & \checkmark \\
+log(1+Departure Delay)         & no  & no  & no  & \checkmark \\
+Inflight wifi service          & no  & no  & no  & \checkmark \\
+Online boarding                & no  & no  & no  & \checkmark \\
+Gate location                  & no  & no  & no  & \checkmark \\
+Age                            & no  & no  & no  & \checkmark \\
+Mid-flight delay (signed log)  & no  & no  & no  & \checkmark \\
+Flight Distance                & no  & no  & no  & \checkmark \\
+\bottomrule
+\end{tabular}
+\end{table}
