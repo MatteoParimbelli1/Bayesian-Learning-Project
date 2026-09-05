@@ -90,7 +90,7 @@ model_string = 'model {
 n_chains  = 3
 n_adapt   = 1500
 burn_in   = 1000
-iter      = 3000
+iter      = 12000
 thinning  = 7
 
 fit_model <- function(model_string, X, arr_delay,
@@ -126,7 +126,7 @@ fit_model <- function(model_string, X, arr_delay,
 
 Before actually evaluating the model, we focus on a small question: is it better to encode the `cabin_class` as dummy variable or as ordered one?
 
-```{r fit-encoding, cache=TRUE}
+```{r fit-encoding, cache=TRUE, cache.extra=list(n_chains, n_adapt, burn_in, iter, thinning)}
 set.seed(123)
 
 fit_dummy_logit   <- fit_model(model_string, X_dummy,   logmid_delay)

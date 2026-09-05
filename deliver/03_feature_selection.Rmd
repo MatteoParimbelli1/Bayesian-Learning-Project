@@ -95,7 +95,7 @@ set.seed(123)
 n_chains  = 3
 n_adapt   = 5000
 burn_in   = 1000
-iter      = 10000
+iter      = 30000
 thinning  = 3
 
 
