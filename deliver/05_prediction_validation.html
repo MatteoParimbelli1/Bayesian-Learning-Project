@@ -1510,8 +1510,8 @@ information into preprocessing.</p>
 logDepDelay_test  &lt;- log1p(test$dep_delay)
 signedLogArr_test &lt;- test$log_mid_delay
 
-Class_EcoPlus_test  &lt;- as.integer(test$cabin_class == &quot;Eco Plus&quot;)
-Class_Business_test &lt;- as.integer(test$cabin_class == &quot;Business&quot;)
+Class_EcoPlus_test  &lt;- as.integer(test$class == &quot;Eco Plus&quot;)
+Class_Business_test &lt;- as.integer(test$class == &quot;Business&quot;)
 TypeTravel_Personal_test &lt;- as.integer(test$travel_type == &quot;Personal Travel&quot;)
 CustType_disloyal_test   &lt;- as.integer(test$customer_type == &quot;disloyal Customer&quot;)
 
@@ -1604,7 +1604,7 @@ in a later section.</p>
 set.seed(123)
 pred_s2 &lt;- predict_model(s2$beta_draws, X_test_s2, arr_delay_test_s2)
 pred_s3 &lt;- predict_model(s3$beta_draws, X_test_s3, arr_delay_test_s3,
-                          group_vars = list(Class = test$cabin_class, CustomerType = test$customer_type,
+                          group_vars = list(Class = test$class, CustomerType = test$customer_type,
                                              TypeOfTravel = test$travel_type))
 
 p_s2 &lt;- pred_s2$p_mean
@@ -1637,7 +1637,7 @@ df_test_bas &lt;- data.frame(
 
 # BAS&#39;s predict(..., estimator=&quot;BMA&quot;) builds an internal n_rows x n_models
 # matrix (here ~1,800 visited models); at the full ~129k-row test set that
-# is &gt;1.5GB and was enough to get the R process OOM-killed on this sandbox.
+# is &gt;1.5GB, which was enough to get the R process OOM-killed.
 # Predicting in batches keeps peak memory bounded to a few hundred MB.
 predict_bas_batched &lt;- function(fit, newdata, batch_size = 10000) {
   n &lt;- nrow(newdata)
@@ -1900,7 +1900,7 @@ observe in the test set – the same three subgroups Section 01 analysed,
 now checked against the model’s out-of-sample predictions on 128,274
 customers it has never seen.</p>
 <pre class="r"><code>observed_rates &lt;- list(
-  Class = tapply(test$y, test$cabin_class, mean),
+  Class = tapply(test$y, test$class, mean),
   CustomerType = tapply(test$y, test$customer_type, mean),
   TypeOfTravel = tapply(test$y, test$travel_type, mean)
 )

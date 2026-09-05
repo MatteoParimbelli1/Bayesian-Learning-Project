@@ -22,7 +22,7 @@ full$y <- as.integer(full$satisfaction == "satisfied")
 # feasible here (cost scales ~linearly with n, and the n=1213 fit already takes
 # minutes -- 129,880 rows would take hours). This is disclosed explicitly in the
 # write-up.
-strata <- interaction(full$satisfaction, full$cabin_class, drop = TRUE)
+strata <- interaction(full$satisfaction, full$class, drop = TRUE)
 idx_large <- createDataPartition(y = strata, p = 15000 / nrow(full), list = FALSE)
 large <- full[idx_large, ]
 cat("Large subsample size:", nrow(large), "\n")
@@ -43,8 +43,8 @@ obs  <- !is.na(large$log_mid_delay)
 mu_a <- mean(large$log_mid_delay[obs]); sd_a <- sd(large$log_mid_delay[obs])
 arr_delay_std <- (large$log_mid_delay - mu_a) / sd_a
 
-Class_EcoPlus  <- as.integer(large$cabin_class == "Eco Plus")
-Class_Business <- as.integer(large$cabin_class == "Business")
+Class_EcoPlus  <- as.integer(large$class == "Eco Plus")
+Class_Business <- as.integer(large$class == "Business")
 TypeTravel_Personal <- as.integer(large$travel_type == "Personal Travel")
 CustType_disloyal   <- as.integer(large$customer_type == "disloyal Customer")
 

@@ -29,8 +29,8 @@ FlightDist_std  <- std(train$flight_distance)
 logDepDelay_std <- std(train$log_dep_delay)
 logMidDelay_std <- std(train$log_mid_delay)
 
-Class_EcoPlus  <- as.integer(train$cabin_class == "Eco Plus")
-Class_Business <- as.integer(train$cabin_class == "Business")
+Class_EcoPlus  <- as.integer(train$class == "Eco Plus")
+Class_Business <- as.integer(train$class == "Business")
 TypeTravel_Personal <- as.integer(train$travel_type == "Personal Travel")
 CustType_disloyal   <- as.integer(train$customer_type == "disloyal Customer")
 

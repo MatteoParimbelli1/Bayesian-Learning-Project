@@ -50,8 +50,8 @@ obs  <- !is.na(sub$log_mid_delay)
 mu_a <- mean(sub$log_mid_delay[obs]); sd_a <- sd(sub$log_mid_delay[obs])
 arr_delay_std <- (sub$log_mid_delay - mu_a) / sd_a
 
-Class_EcoPlus  <- as.integer(sub$cabin_class == "Eco Plus")
-Class_Business <- as.integer(sub$cabin_class == "Business")
+Class_EcoPlus  <- as.integer(sub$class == "Eco Plus")
+Class_Business <- as.integer(sub$class == "Business")
 TypeTravel_Personal <- as.integer(sub$travel_type == "Personal Travel")
 CustType_disloyal   <- as.integer(sub$customer_type == "disloyal Customer")
 
