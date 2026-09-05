@@ -33,7 +33,7 @@ n_train <- nrow(train)
 
 ## 0. Covariate preparation
 
-We start by fitting the model on the suggested covariates (or their transformation):`age`, `seat_comfort`, `flight_distace`, `cabin_class`, `log_dep_delay` and `log_mid_delay`.
+We start by fitting the model on the suggested covariates (or their transformation):`age`, `seat_comfort`, `flight_distace`, `class`, `log_dep_delay` and `log_mid_delay`.
 
 ```{r}
 # helper function to standardize covariates and make them numeric
@@ -48,9 +48,9 @@ CustType_disloyal   <- as.integer(train$customer_type == "disloyal Customer")
 
 logmid_delay    <- std(train$log_mid_delay)
 
-Class_EcoPlus   <- as.integer(train$cabin_class == "Eco Plus")
-Class_Business  <- as.integer(train$cabin_class == "Business")
-Class_score_std <- std(as.integer(factor(train$cabin_class, levels = c("Eco", "Eco Plus", "Business"), ordered = TRUE)))
+Class_EcoPlus   <- as.integer(train$class == "Eco Plus")
+Class_Business  <- as.integer(train$class == "Business")
+Class_score_std <- std(as.integer(factor(train$class, levels = c("Eco", "Eco Plus", "Business"), ordered = TRUE)))
 
 
 X_dummy <- cbind(Age_std, Seat_std, FlightDist_std, Class_EcoPlus, Class_Business,
@@ -122,9 +122,9 @@ fit_model <- function(model_string, X, arr_delay,
 
 ```
 
-### 1.1 cabin_class encoding
+### 1.1 class encoding
 
-Before actually evaluating the model, we focus on a small question: is it better to encode the `cabin_class` as dummy variable or as ordered one?
+Before actually evaluating the model, we focus on a small question: is it better to encode the `class` as dummy variable or as ordered one?
 
 ```{r fit-encoding, cache=TRUE}
 set.seed(123)
@@ -167,11 +167,11 @@ logmid_test         <- std_with(test$log_mid_delay, mean(train$log_mid_delay), s
 TypeTravel_Personal_test <- as.integer(test$travel_type == "Personal Travel")
 CustType_disloyal_test   <- as.integer(test$customer_type == "disloyal Customer")
 
-Class_EcoPlus_test  <- as.integer(test$cabin_class == "Eco Plus")
-Class_Business_test <- as.integer(test$cabin_class == "Business")
+Class_EcoPlus_test  <- as.integer(test$class == "Eco Plus")
+Class_Business_test <- as.integer(test$class == "Business")
 
-class_int_train <- as.integer(factor(train$cabin_class, levels = c("Eco", "Eco Plus", "Business"), ordered = TRUE))
-class_int_test  <- as.integer(factor(test$cabin_class,  levels = c("Eco", "Eco Plus", "Business"), ordered = TRUE))
+class_int_train <- as.integer(factor(train$class, levels = c("Eco", "Eco Plus", "Business"), ordered = TRUE))
+class_int_test  <- as.integer(factor(test$class,  levels = c("Eco", "Eco Plus", "Business"), ordered = TRUE))
 Class_score_std_test <- std_with(class_int_test, mean(class_int_train), sd(class_int_train))
 
 X_dummy_test   <- cbind(Age_std_test, Seat_std_test, FlightDist_std_test,
@@ -216,7 +216,6 @@ oos_cmp <- rbind(
 )
 knitr::kable(round(oos_cmp, 4))
 ```
-
 
 ## 2. MCMC diagnostic
 

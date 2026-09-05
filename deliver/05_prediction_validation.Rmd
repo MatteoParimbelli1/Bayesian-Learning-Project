@@ -48,8 +48,8 @@ std_with <- function(x, mean, sd) (x - mean) / sd
 logDepDelay_test  <- log1p(test$dep_delay)
 signedLogArr_test <- test$log_mid_delay
 
-Class_EcoPlus_test  <- as.integer(test$cabin_class == "Eco Plus")
-Class_Business_test <- as.integer(test$cabin_class == "Business")
+Class_EcoPlus_test  <- as.integer(test$class == "Eco Plus")
+Class_Business_test <- as.integer(test$class == "Business")
 TypeTravel_Personal_test <- as.integer(test$travel_type == "Personal Travel")
 CustType_disloyal_test   <- as.integer(test$customer_type == "disloyal Customer")
 
@@ -145,7 +145,7 @@ predict_model <- function(beta_draws, X, arr_delay, group_vars = NULL) {
 set.seed(123)
 pred_s2 <- predict_model(s2$beta_draws, X_test_s2, arr_delay_test_s2)
 pred_s3 <- predict_model(s3$beta_draws, X_test_s3, arr_delay_test_s3,
-                          group_vars = list(Class = test$cabin_class, CustomerType = test$customer_type,
+                          group_vars = list(Class = test$class, CustomerType = test$customer_type,
                                              TypeOfTravel = test$travel_type))
 
 p_s2 <- pred_s2$p_mean
@@ -348,7 +348,7 @@ checked against the model's out-of-sample predictions on
 
 ```{r ppc-plot, fig.width=9, fig.height=3.5}
 observed_rates <- list(
-  Class = tapply(test$y, test$cabin_class, mean),
+  Class = tapply(test$y, test$class, mean),
   CustomerType = tapply(test$y, test$customer_type, mean),
   TypeOfTravel = tapply(test$y, test$travel_type, mean)
 )

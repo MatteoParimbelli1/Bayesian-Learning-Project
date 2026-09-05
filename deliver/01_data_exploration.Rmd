@@ -49,7 +49,7 @@ In order to make the columns easier to manager, we change the column's names, sw
 
 ```{r}
 new_names <- c(
-  "satisfaction", "customer_type", "age", "travel_type", "cabin_class",
+  "satisfaction", "customer_type", "age", "travel_type", "class",
   "flight_distance", "seat_comfort", "time_convenient", "food_drink",
   "gate_location", "wifi", "entertainment", "online_support", "ease_booking",
   "onboard_service", "legroom", "baggage", "checkin", "cleanliness",
@@ -363,7 +363,7 @@ The brief describes a curated 1,000-row file; we have the full `r format(dim(raw
 
 ```{r fig.width=14, fig.height=14}
 
-cat_vars <- c("satisfaction", "customer_type", "travel_type", "cabin_class")
+cat_vars <- c("satisfaction", "customer_type", "travel_type", "class")
 
 lapply(raw[cat_vars], function(x) round(prop.table(table(x)), 3))
 ```
@@ -373,7 +373,7 @@ Basically all categorical variables need to be stratified.
 ```{r}
 set.seed(123)
 
-strata <- interaction(raw$satisfaction, raw$cabin_class, raw$customer_type, raw$travel_type, drop = TRUE)
+strata <- interaction(raw$satisfaction, raw$class, raw$customer_type, raw$travel_type, drop = TRUE)
 train_idx <- createDataPartition(y = strata, p = 1200 / nrow(raw), list = FALSE)
   
 train_df <- raw[train_idx, ]
@@ -393,7 +393,7 @@ cat("Satisfaction proportions (full data vs. training subsample):\n")
 print(compare_tbl("satisfaction"))
 
 cat("\nClass proportions (full data vs. training subsample):\n")
-print(compare_tbl("cabin_class"))
+print(compare_tbl("class"))
 
 cat("\nCustomer Type proportions (full data vs. training subsample):\n")
 print(compare_tbl("customer_type"))
