@@ -9,7 +9,7 @@ few modelling choices (prior specification, encoding of the cabin class, MCMC
 setup) that will be reused by the richer shrinkage model of Section
 \ref{sec:regression}.
 
-\subsection{Covariates and model specification}
+\subsection{Covariates and prior specification}
 Following the suggestions of the brief, we fit the model on a compact subset of
 covariates, using the transformations motivated in the data-exploration phase
 (Section \ref{sec:data_expl}): \texttt{age}, \texttt{seat\_comfort},
@@ -21,22 +21,7 @@ with the two binary descriptors \texttt{travel\_type} and
 level is chosen as the majority group (\textit{Business travel} and
 \textit{Loyal customer}), so that each coefficient measures the effect of the
 minority condition relative to the typical customer.
-\newline
-\hfill\newline
-As stated before, we assume a Bernoulli likelihood with a logit link:
-\begin{equation}
-    y_i \mid p_i \sim \text{Bernoulli}(p_i),
-    \qquad
-    \text{logit}(p_i) = \beta_0 + x_i^\top \beta
-        + \beta_{\text{mid}}\cdot\texttt{midflight\_delay}_i .
-    \label{eq:logit_model}
-\end{equation}
-The mid-flight delay is deliberately kept outside the main design matrix and
-given its own coefficient $\beta_{\text{mid}}$, paired with an explicit
-per-row sampling statement $\texttt{midflight\_delay}_i \sim \mathcal{N}(0,1)$.
-This treats the (standardised) mid-flight delay as a stochastic node in JAGS rather than
-a fixed regressor, which is convenient for handling it as an augmented quantity
-and keeps its contribution cleanly separated from the other effects.
+The model \ref{eq:logit_model} is still the same, just reduced at these variables.
 
 \paragraph{Prior specification.}
 Since we have no strong prior belief on the magnitude or the sign of the
@@ -64,12 +49,12 @@ preferable to encode \texttt{class} as a pair of dummy variables
 (\textit{Eco Plus} and \textit{Business}, with \textit{Eco} as reference) or as a
 single centred ordinal score ($1/2/3$)? To decide, we fit the model
 \eqref{eq:priors} under both encodings and compare them with the Widely
-Applicable Information Criterion (WAIC) \cite{watanabe2010waic}, computed from the pointwise
+Applicable Information Criterion (WAIC) \cite{bl_book}, computed from the pointwise
 log-likelihood of the MCMC draws.
 
-The dummy encoding attains the lower WAIC ($1373.2$ against $1379.6$ for the
+The dummy encoding attains the lower WAIC ($1373.4$ against $1379.1$ for the
 ordinal one), i.e. a slightly better expected predictive fit. The difference in
-expected log predictive density is $\Delta\text{elpd} = -3.2$ with a standard
+expected log predictive density is $\Delta\text{elpd} = -3$ with a standard
 error of $2.7$, so the preference, although real, is smaller than two standard
 errors and therefore modest. Because \texttt{class} is genuinely
 \emph{nominal} rather than an equally-spaced ordinal scale, and because the
@@ -81,7 +66,7 @@ set ($n\approx128{,}000$ customers), using the posterior-mean predictive
 probability $\hat p_i = S^{-1}\sum_{s=1}^{S}\mathrm{logit}^{-1}\!\left(\hat\beta_0^{(s)} + x_i\hat\beta^{(s)}\right)$
 obtained from the already-fitted MCMC draws (without additional sampling). The dummy encoding again outperforms the ordinal one on all three
 out-of-sample scoring rules considered: log-loss (0.557 against 0.562),
-Brier score \cite{brier1950} (0.187 against 0.190), and AUC (0.786 against 0.781). Since the
+Brier score (0.187 against 0.190), and AUC (0.786 against 0.781). Since the
 WAIC-based preference is corroborated out-of-sample, we treat the encoding
 choice as settled.
 
@@ -100,22 +85,24 @@ Posterior inference is carried out via MCMC in JAGS. Table
     Chains            & 3 \\
     Adaptation        & 1500 \\
     Burn-in           & 1000 \\
-    Iterations (kept) & 3000 \\
+    Iterations        & 12000 \\
     Thinning          & 7 \\
+    Retained draws    & 5142 \\
     \bottomrule
   \end{tabular}
 \end{table}
 
-Convergence was satisfactory for all parameters. The Gelman--Rubin \cite{gelman1992rubin} potential
-scale reduction factors are essentially $1$ (point estimates $1.00$--$1.01$,
-upper confidence limits up to $1.02$, multivariate PSRF $= 1.01$), the trace
-plots show well-mixed, stationary chains overlapping around a common region, and
-the autocorrelation decays quickly to zero within a few lags after thinning. The
-effective sample sizes range from about $590$ (for the intercept and the
-personal-travel coefficient) to roughly $1350$, which is adequate for
-stable posterior summaries. A complete convergence assessment
+Convergence was satisfactory for all parameters. The Gelman--Rubin \cite{bl_book} potential
+scale reduction factors are essentially $1$ (point estimates $1$,
+upper confidence limits capped at 1.01, multivariate PSRF $= 1$), the trace
+plots show well-mixed, stationary chains, and
+the autocorrelation decays quickly to zero within a few,small lags . The
+effective sample sizes are at or near the number of retained draws for most
+parameters, with the lowest at $2057$: the Monte Carlo standard error is
+therefore at most $2.2\%$ of the posterior standard deviation, so the summaries
+we report are stable to the precision at which we quote them. The complete convergence assessment
 (trace plots, autocorrelation functions and the full diagnostic tables) is
-deferred to Appendix \ref{app:mcmc_logit}.
+deferred to Appendix \ref{app:logit_convergence}.
 
 \subsection{Posterior results}
 Figures for the posterior densities of the coefficients and the odds-ratio
@@ -146,32 +133,33 @@ posterior mean, the $95\%$ credible interval on the log-odds scale
     \toprule
     Term & $\bar\beta$ & $\beta_{2.5\%}$ & $\beta_{97.5\%}$ & OR & OR$_{2.5\%}$ & OR$_{97.5\%}$ \\
     \midrule
-    Class: Business (vs Eco)             & $1.450$  & $1.120$  & $1.804$  & $4.265$ & $3.065$ & $6.075$ \\
-    Seat comfort                         & $0.632$  & $0.485$  & $0.768$  & $1.881$ & $1.625$ & $2.156$ \\
-    Class: Eco Plus (vs Eco)             & $0.050$  & $-0.441$ & $0.524$  & $1.052$ & $0.643$ & $1.688$ \\
-    Age                                  & $-0.026$ & $-0.164$ & $0.127$  & $0.975$ & $0.848$ & $1.135$ \\
-    Mid-flight delay (signed-log)        & $-0.041$ & $-0.187$ & $0.111$  & $0.960$ & $0.830$ & $1.118$ \\
-    Flight distance                      & $-0.052$ & $-0.185$ & $0.090$  & $0.949$ & $0.831$ & $1.094$ \\
-    Intercept                            & $-0.105$ & $-0.400$ & $0.180$  & $0.901$ & $0.670$ & $1.198$ \\
-    Personal Travel (vs Business travel) & $-0.168$ & $-0.498$ & $0.166$  & $0.846$ & $0.608$ & $1.181$ \\
-    $\log(1+\text{Departure Delay})$     & $-0.230$ & $-0.371$ & $-0.078$ & $0.795$ & $0.690$ & $0.925$ \\
-    disloyal Customer (vs Loyal)         & $-1.825$ & $-2.253$ & $-1.431$ & $0.161$ & $0.105$ & $0.239$ \\
+    Class: Business (vs Eco)             & $1.440$  & $1.088$  & $1.791$  & $4.221$ & $2.967$ & $5.993$ \\
+    Seat comfort                         & $0.632$  & $0.497$  & $0.769$  & $1.882$ & $1.644$ & $2.157$ \\
+    Class: Eco Plus (vs Eco)             & $0.032$  & $-0.467$ & $0.525$  & $1.033$ & $0.627$ & $1.691$ \\
+    Age                                  & $-0.028$ & $-0.166$ & $0.108$  & $0.972$ & $0.847$ & $1.114$ \\
+    Mid-flight delay (signed-log)        & $-0.038$ & $-0.182$ & $0.108$  & $0.963$ & $0.833$ & $1.114$ \\
+    Flight distance                      & $-0.053$ & $-0.192$ & $0.086$  & $0.949$ & $0.825$ & $1.090$ \\
+    Intercept                            & $-0.087$ & $-0.405$ & $0.233$  & $0.917$ & $0.667$ & $1.262$ \\
+    Personal Travel (vs Business travel) & $-0.184$ & $-0.546$ & $0.189$  & $0.832$ & $0.580$ & $1.208$ \\
+    $\log(1+\text{Departure Delay})$     & $-0.229$ & $-0.373$ & $-0.089$ & $0.795$ & $0.689$ & $0.914$ \\
+    disloyal Customer (vs Loyal)         & $-1.845$ & $-2.257$ & $-1.439$ & $0.158$ & $0.105$ & $0.237$ \\
     \bottomrule
   \end{tabular}%
   }
 \end{table}
 
+% postpone this 'till re-run
 Four effects clearly separate from the ``no-effect'' line (OR $=1$). The
 largest in magnitude is customer loyalty, and it runs negative: a
 \textit{disloyal customer} has markedly lower odds of being satisfied
-(OR $\approx 0.16$, $[0.11, 0.24]$, i.e.\ $\bar\beta = -1.83$). Cabin class
+(OR $\approx 0.16$, $[0.11, 0.24]$, i.e.\ $\bar\beta = -1.85$). Cabin class
 comes next: travelling in \textit{Business} rather than \textit{Eco}
-multiplies the odds by roughly $4.3$ ($95\%$ CI $[3.07, 6.08]$,
-$\bar\beta = +1.45$), even after adjusting for all the other covariates.
+multiplies the odds by roughly $4.2$ ($95\%$ CI $[2.97, 5.99]$,
+$\bar\beta = +1.44$), even after adjusting for all the other covariates.
 \textit{Seat comfort} follows (OR $\approx 1.88$ per standard deviation,
-$[1.63, 2.16]$): more comfortable seating is strongly associated with
+$[1.64, 2.16]$): more comfortable seating is strongly associated with
 satisfaction. A longer departure delay reduces the odds too
-(OR $\approx 0.80$ per unit of $\log(1+\text{delay})$, $[0.69, 0.93]$).
+(OR $\approx 0.80$ per unit of $\log(1+\text{delay})$, $[0.69, 0.91]$).
 
 The remaining covariates have credible intervals that comfortably include $1$
 and cannot be called confident drivers on their own: \textit{Eco Plus} is
@@ -179,16 +167,16 @@ statistically indistinguishable from \textit{Eco}, while \textit{age},
 \textit{flight distance} and the \textit{mid-flight delay} all show
 weak, uncertain effects.
 
-The most instructive case is the \textit{type of travel}. In the exploratory
-analysis personal-travel customers appeared markedly less satisfied, an almost
-certain marginal association; here, once cabin class and the other covariates
-are held fixed, the credible interval for \textit{Personal Travel}
-($0.61$ to $1.18$) comes close to, but no longer excludes, $1$. This is exactly
-the confounding anticipated in Section \ref{sec:data_expl}: business travellers
-are disproportionately booked in Business class, so once class enters the model
-directly it absorbs most of the apparent travel-type effect. Both the borderline
-effects (flight distance, departure delay) and this partially-explained
-travel-type signal motivate the richer specification of Section
-\ref{sec:regression}, where the full battery of $14$ service-quality ratings is
-added under a shrinkage prior to clarify which of these effects survive
-alongside the stronger, correlated service signals.
+%The most instructive case is the \texttt{type of travel}. In the exploratory
+%analysis personal-travel customers appeared markedly less satisfied, an almost
+%certain marginal association; here, once cabin class and the other covariates
+%are held fixed, the credible interval for \textit{Personal Travel}
+%($0.61$ to $1.18$) comes close to, but no longer excludes, $1$. This is exactly
+%the confounding anticipated in Section \ref{sec:data_expl}: business travellers
+%are disproportionately booked in Business class, so once class enters the model
+%directly it absorbs most of the apparent travel-type effect. Both the borderline
+%effects (flight distance, departure delay) and this partially-explained
+%travel-type signal motivate the richer specification of Section
+%\ref{sec:regression}, where the full battery of $14$ service-quality ratings is
+%added under a shrinkage prior to clarify which of these effects survive
+%alongside the stronger, correlated service signals.

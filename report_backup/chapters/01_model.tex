@@ -1,14 +1,19 @@
 \section{Model specification}
 Let $y_i$ denote the satisfaction level of customer $i$. We assume that
 $$
-y_i \sim\ \textbf{Bernoulli}(p)
+y_i\ |\ p_i\sim\ \textbf{Bernoulli}(p_i)
 $$
-where $p$ is the probability that a customer is satisfied.
-We model the probability $p$ as a function of the covariates $X$ as
+where $p_i$ is the probability that customer $i$ is satisfied.
+We model the probability $p_i$ as a function of the covariates $X$ as
 $$
-\text{logit}(p)=\ln\left(\cfrac{p}{1-p}\right) = \beta_0+X\beta
+\text{logit}(p_i)=\ln\left(\cfrac{p_i}{1-p_i}\right) = \beta_0+x_i\beta + \beta_{\text{mid}}\cdot\texttt{midflight\_delay}_i .
+    \label{eq:logit_model}
 $$
-where $\beta_0$ is the intercept in the logit space and $\beta$ is the vector of regression coefficients of the covariates $X$ (after the introduction of midflight dely the deletion of arrival delay).
+where $\beta_0$ is the intercept in the logit space and $\beta$ is the vector of regression coefficients of the remaining original covariates $X$ (after skewness adjustment, eventual hot-encoding for categorical variables and data augmentation), $x_i$ is the covariates set of customer $i$.
+The mid-flight delay is deliberately kept outside the main design matrix and
+given its own coefficient $\beta_{\text{mid}}$, paired with an explicit
+per-row sampling statement $\texttt{midflight\_delay}_i \sim \mathcal{N}(0,1)$ in the JAGS model.
 \newline
+\hfill\newline
 Later in the project we will carry out the analysis by using several models, and for each one of them we'll describe the structure of the prior we decide to use for the regression coefficients.
 

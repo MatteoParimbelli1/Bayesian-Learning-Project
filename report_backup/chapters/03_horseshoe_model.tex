@@ -9,32 +9,21 @@ among \emph{all} the available predictors, in particular the fourteen
 service-quality ratings that were set aside earlier, which ones actually carry
 signal for customer satisfaction, and which are redundant? Rather than answering
 this by hand, adding and removing covariates and guessing at their relevance, we
-prefer a principled, automatic mechanism. We therefore fit a Bayesian logistic
-regression on the \emph{full} set of covariates under a \textbf{horseshoe}
-shrinkage prior \cite{bl_book,carvalho2010horseshoe}, which is designed to pull the coefficients of
+prefer fitting a Bayesian logistic regression on the \emph{full} set of covariates under a \textbf{horseshoe} shrinkage prior \cite{bl_book}, which is designed to pull the coefficients of
 noise predictors strongly towards zero while leaving genuine signals almost
 untouched. This lets the data, rather than our prior guesses, single out the
 meaningful covariates.
 
-\subsection{Model specification}
+\subsection{Prior specification}
 We include all $21$ standardised predictors: the $14$ service-quality items
 plus \texttt{age}, \texttt{flight\_distance}, the two cabin-class dummies
 (\textit{Eco Plus}, \textit{Business}), $\log(1+\texttt{dep\_delay})$,
-\textit{Personal Travel} and \textit{disloyal Customer} -- and, as in Section
-\ref{sec:logit}, the mid-flight delay is kept outside the design matrix with its
-own coefficient $\beta_{\text{mid}}$. The likelihood is again Bernoulli with a
-logit link:
-\begin{equation}
-    y_i \mid p_i \sim \text{Bernoulli}(p_i),
-    \qquad
-    \text{logit}(p_i) = \beta_0 + x_i^\top \beta
-        + \beta_{\text{mid}}\,\texttt{midflight\_delay}_i .
-    \label{eq:hs_model}
-\end{equation}
+\textit{Personal Travel} and \textit{disloyal Customer}.
+
 
 The horseshoe prior replaces the common vague Gaussian of Section
 \ref{sec:logit} with a scale-mixture of normals: each coefficient gets its own
-\emph{local} scale $\lambda_j$, and all local scales share a single
+\emph{local} scale $\lambda_j$, and all coefficients share a single
 \emph{global} scale $\tau$,
 \begin{equation}
     \beta_j \mid \lambda_j, \tau \sim \mathcal{N}(0, \lambda_j^2 \tau^2),
@@ -55,7 +44,7 @@ the \emph{same} global $\tau$, so that it competes for signal on an equal footin
 with the other $21$ predictors. Following the JAGS notes, each half-Cauchy is
 implemented as a Student-$t$ with one degree of freedom truncated to the positive
 reals, \texttt{dt(0, 1, 1)\,T(0, )}. The intercept keeps a diffuse Gaussian
-prior, $\beta_0 \sim \mathcal{N}(0, 100)$ (i.e. \texttt{dnorm(0, 0.01)}), and is
+prior, $\beta_0 \sim \mathcal{N}(0, 100)$, and is
 deliberately left out of the shrinkage so that the baseline log-odds is not
 penalised.
 
@@ -77,7 +66,7 @@ is computationally heavier ($22$ coefficients, $22$ local scales and one global
 scale, against the $9$ parameters of Section \ref{sec:logit}). We therefore
 budget a longer sampling run and thinning from the outset; the settings, reported
 in Table \ref{tab:hs_mcmc_settings}, are deliberately modest given the
-single-core environment and could be extended on a larger machine.
+single-core environment at our disposale and could be extended on a more performative machine.
 
 \begin{table}[htbp]
   \centering
@@ -88,10 +77,11 @@ single-core environment and could be extended on a larger machine.
     Setting & Value \\
     \midrule
     Chains            & 3 \\
-    Adaptation        & 1500 \\
+    Adaptation        & 5000 \\
     Burn-in           & 1000 \\
-    Iterations (kept) & 5000 \\
+    Iterations        & 30000 \\
     Thinning          & 3 \\
+    Retained draws    & 30000 \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -106,20 +96,20 @@ the scale parameters, and $\tau$ in particular, mix more slowly and show higher
 autocorrelation, as expected for a horseshoe, but reach effective sample sizes
 adequate for the summaries we report. Figures \ref{fig:hs_trace_beta} and
 \ref{fig:hs_trace_lambda} show a representative trace plot for each block. The
-complete diagnostic material -- all trace and autocorrelation plots for both the
-$\beta$ and the $\lambda$ parameters, together with the full Gelman--Rubin and
-effective-sample-size tables -- is collected in Appendix
-\ref{app:mcmc_horseshoe}.
+remaining diagnostics -- trace and autocorrelation plots for the other $\beta$
+and $\lambda$ parameters, with the full Gelman--Rubin and effective-sample-size
+tables -- were inspected in the accompanying notebook
+(\texttt{03\_feature\_selection.Rmd}) and are not reproduced here.
 
 \begin{figure}[!ht]
   \centering
-  \begin{subfigure}[t]{0.49\linewidth}
+  \begin{subfigure}[t]{0.30\linewidth}
     \centering
     \includegraphics[width=\linewidth]{img/horseshoe_model/trace_beta_1.png}
     \caption{A subset of the regression coefficients $\beta_j$.}
     \label{fig:hs_trace_beta}
   \end{subfigure}\hfill
-  \begin{subfigure}[t]{0.49\linewidth}
+  \begin{subfigure}[t]{0.30\linewidth}
     \centering
     \includegraphics[width=\linewidth]{img/horseshoe_model/trace_lambda_1.png}
     \caption{The local scales $\lambda_j$ and the global scale $\tau$, which
@@ -182,7 +172,7 @@ the exploratory analysis (Section \ref{sec:data_expl}), the prior does not treat
 them symmetrically: \textit{Ease of Online booking} and \textit{Online support}
 are preserved noticeably more than \textit{Online boarding} and
 \textit{Inflight wifi service}, both of which sit among the most heavily shrunk
-items in the model ($\kappa_j = 0.73$ and $0.72$). This is exactly the mechanism the horseshoe was chosen for: when
+items in the model ($\kappa_j = 0.74$ and $0.73$). This is exactly the mechanism the horseshoe was chosen for: when
 several correlated items carry overlapping information, the prior lets two of them
 represent the signal and treats the other two as largely redundant, instead of
 forcing us to pick one by hand.
@@ -190,7 +180,7 @@ forcing us to pick one by hand.
 \textbf{Business class shrinks once service quality is in the model, but remains one
 of the strongest effects.} In Section~2, \texttt{Business} class alone carried a
 large, confident odds ratio (about 4). Here, with all 14 service ratings included,
-its coefficient drops to approximately 0.9 on the log-odds scale ($\kappa = 0.180$),
+its coefficient drops to approximately 0.9 on the log-odds scale ($\kappa = 0.183$),
 with a 95\% credible interval comfortably above zero (roughly $[0.4, 1.3]$). Together
 with \emph{disloyal Customer} and \emph{Inflight entertainment}, it remains among the
 three least-shrunk, most confidently preserved effects in the entire model -- smaller
@@ -205,7 +195,7 @@ Section \ref{sec:logit} found the type-of-travel effect nearly explained away by
 \textit{Class}. Under the horseshoe, once the service ratings control for the
 \emph{quality} of the trip experience, \textit{Personal Travel} re-emerges with a
 sizeable negative coefficient and a credible interval that lies below zero,
-although only just ($[-1.02,\,-0.004]$). The two findings are not
+although only just ($[-1.03,\,-0.002]$). The two findings are not
 contradictory: they show that the earlier attenuation was specifically about
 \textit{Class} soaking up part of the travel-type signal, not about travel type
 being unimportant.
@@ -228,4 +218,10 @@ strongest and most confidently preserved effect in the entire model -- consisten
 across the exploratory analysis and both models of Sections \ref{sec:logit} and
 \ref{sec:regression}, regardless of how many other covariates are present.
 
+% -----------------------------------------------------------------------------
+% code (specific kappa_j values, the Business/Personal-Travel/time-convenient
+% posterior means and 95% credible-interval endpoints). Those numbers come from
+% the knitted run and were not available when this draft was written, so they
+% are described qualitatively above. Fill in the precise values from the
+% kappa_tbl of notebook 03 (03_horseshoe_summary.rds) where desired.
 % -----------------------------------------------------------------------------
