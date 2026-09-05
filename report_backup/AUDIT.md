@@ -4,16 +4,17 @@ Every number in the report was checked against the `.rds` files the code writes,
 and every claim in the prose against the data behind it. Three passes: the
 tables, then ten structural sweeps, then the reasoning.
 
-**30 issues found. All 30 are applied.** Numbered below so they can be referred
+**32 issues found. All 32 are applied.** Numbered below so they can be referred
 to individually.
 
-The report compiles at **24 pages**, 0 LaTeX errors, 0 duplicate labels, 0
+The report compiles at **30 pages**, 0 LaTeX errors, 0 duplicate labels, 0
 unresolved references, 0 unresolved citations. Every float is referred to
 somewhere in the prose. Every number was read back out of the `.rds` files
 after the 5 September re-runs.
 
-Sections 26 to 30 were added after the original 25 and cover the longer chains,
-the 04b/04d re-runs, the MCMC settings tables, and the figures.
+Sections 26 to 32 were added after the original 25 and cover the longer chains,
+the 04b/04d re-runs, the MCMC settings tables, the figures, and the horseshoe
+convergence appendix.
 
 ---
 
@@ -145,13 +146,19 @@ removed, correctly, since out-of-sample validation was added for that section.
 ## Page count
 
 Measured from the built PDF: the body runs to **page 17**, the appendices are
-**pages 18 to 24**. Target for the body is 8 to 10, so this is still roughly
+**pages 18 to 30**. Target for the body is 8 to 10, so the body is still about
 seven pages over.
 
-Deleting the duplicated appendix block (issues 9-13) took the document from 26
-pages to 24, but that came out of the appendices, not the body.
+The appendices grew from 7 pages to 13 when the horseshoe convergence appendix
+was written (issue 31). That is a deliberate trade: the chapter had been
+promising that material and could not deliver it. If it has to come down, the
+cheapest cut is to keep the ACF figures for chain 1 only and say the other two
+chains look the same -- worth about four pages.
 
-The largest single cut still available: Table 8 (`tab:hs-signal`) is
+Deleting the duplicated appendix block (issues 9-13) had earlier taken the
+document from 26 pages to 24, also out of the appendices rather than the body.
+
+The largest cut still available in the body: Table 8 (`tab:hs-signal`) is
 `tab:hs-kappa` with a threshold applied and carries no information of its own.
 TODO.md lists the rest, ranked by how little is lost.
 
@@ -172,6 +179,8 @@ are unchanged.
 | `appendix/bas_comparison.tex` | 9-13, 19, 23, 29 |
 | `appendix/data_aug.tex` | 20, 22, 30 |
 | `appendix/logit_convergence.tex` | 18, 28 |
+| `appendix/horseshoe_convergence.tex` | 31 (new file) |
+| `main.tex` | 31 (includes the new appendix) |
 | `img/sensitivity/*.png` | 30 (verified current, unchanged) |
 
 **Careful:** the team edits the same project. Two rounds of work have already
@@ -556,10 +565,8 @@ Found while re-applying issue 11/12. Not in the original 25.
 |---|---|---|---|---|
 | 29 | Chapter 3 pointed at an appendix that does not exist | `The complete diagnostic material -- all trace and autocorrelation plots for both the $\beta$ and the $\lambda$ parameters, together with the full Gelman--Rubin and effective-sample-size tables -- is collected in Appendix \ref{app:mcmc_horseshoe}.` | `The remaining diagnostics -- trace and autocorrelation plots for the other $\beta$ and $\lambda$ parameters, with the full Gelman--Rubin and effective-sample-size tables -- were inspected in the accompanying notebook (\texttt{03\_feature\_selection.Rmd}) and are not reproduced here.` | `\label{app:mcmc_horseshoe}` sat on the BAS *Parameter-space convergence* section, which contains none of that material. `appendix/horsehose_convergence.tex` -- the file that presumably should have held it -- is **empty (0 bytes)**, is not `\include`d in `main.tex`, and its filename is misspelled. So the chapter promised a complete diagnostic appendix and sent the reader to the wrong section, which happens to be about a different model. Rewritten to claim only what the document delivers. The unused `\label{app:mcmc_logit}` was removed at the same time. |
 
-**Still worth doing if there is time:** either populate
-`appendix/horsehose_convergence.tex` (and fix its name to
-`horseshoe_convergence.tex`) with the horseshoe diagnostics and restore the
-stronger sentence, or delete the empty file so nobody wonders what it was for.
+**Done** -- see issue 31. The appendix was written, the file renamed, and the
+stronger sentence restored.
 
 ## Left for a human
 
@@ -628,3 +635,67 @@ those four plots has not moved, so neither have the plots.
 
 Build after all of this: **24 pages, 0 errors, 0 unresolved references, 0
 multiply-defined labels, 0 missing graphics.**
+
+---
+
+# 31. The horseshoe convergence appendix, written
+
+Issue 29 recorded that Chapter 3 promised a complete diagnostic appendix and
+pointed at a label sitting on the BAS section, because
+`appendix/horsehose_convergence.tex` was empty, unincluded and misspelled. The
+stopgap was to weaken the sentence. The appendix has now been written, so the
+sentence is restored.
+
+| # | Title | Before | After | Reason |
+|---|---|---|---|---|
+| 31 | Empty appendix, weakened claim | `appendix/horsehose_convergence.tex` -- 0 bytes, not `\include`d, filename misspelled. Chapter 3: `The remaining diagnostics ... were inspected in the accompanying notebook (\texttt{03\_feature\_selection.Rmd}) and are not reproduced here.` | `appendix/horseshoe_convergence.tex` -- 277 lines, `\include`d from `main.tex`, `\label{app:horseshoe_convergence}`. Chapter 3: `The complete diagnostic material -- all trace and autocorrelation plots for both blocks, together with the full Gelman--Rubin and effective-sample-size tables -- is collected in Appendix~\ref{app:horseshoe_convergence}, where the three imperfectly converged scales are identified and their consequences discussed.` | The empty file was deleted and replaced by a correctly spelled one. The report now delivers what the chapter claims. |
+
+## What the appendix contains
+
+- Trace plots for parameter groups 2 to 4 of both blocks (group 1 is already in
+  Chapter 3), packed two per row.
+- All 24 autocorrelation figures: 3 chains x 4 groups x 2 blocks.
+- Gelman--Rubin point estimates, upper limits and effective sample sizes for all
+  23 coefficients and all 23 scale parameters, labelled with the covariate names
+  rather than `beta[1]`.
+
+All numbers were read out of the rendered `03_feature_selection.html`, which is
+the output of the `iter = 30000` run. Nothing was recomputed by hand.
+
+# 32. Chapter 3 named the wrong parameter as the slow one
+
+Found while building the tables above.
+
+| # | Title | Before | After | Reason |
+|---|---|---|---|---|
+| 32 | $\tau$ called the worst-mixing parameter | `the scale parameters, and $\tau$ in particular, mix more slowly and show higher autocorrelation, as expected for a horseshoe, but reach effective sample sizes adequate for the summaries we report` | `The local scales $\lambda_j$ mix more slowly and show higher autocorrelation, as expected for a horseshoe, and three of them sit at or above the conventional $1.1$ threshold; the global scale $\tau$, by contrast, is among the better-behaved parameters in that block.` | The opposite of the truth for $\tau$. It has PSRF $1.00$ and ESS \num{4515} -- the second-highest in its block, behind only $\lambda_4$ at \num{4882}. The local scales run down to \num{1388}. The block as a whole does mix more slowly than the coefficients, so that half of the sentence was right; singling out $\tau$ was not. |
+
+## The genuinely bad news, now stated in the report
+
+Three local scales exceed the conventional $\hat{R} < 1.1$ threshold:
+
+| Parameter | Covariate | PSRF | Upper C.I. | ESS |
+|---|---|---|---|---|
+| $\lambda_{10}$ | Leg room service | **1.21** | **1.31** | 2103 |
+| $\lambda_{3}$ | Food and drink | 1.10 | 1.12 | 1388 |
+| $\lambda_{14}$ | Online boarding | 1.10 | 1.11 | 2432 |
+
+This is written into the appendix rather than smoothed over, together with why
+it does not overturn the chapter:
+
+- The corresponding coefficients converged cleanly. $\beta_3$, $\beta_{10}$ and
+  $\beta_{14}$ all have PSRF $1.00$ and ESS \num{7253}, \num{19144} and
+  \num{12963}.
+- $\kappa_j = 1/(1+\lambda_j^2)$ is a bounded, monotone transformation of
+  $\lambda_j$, so the uncertainty is in the third decimal of a shrinkage weight,
+  not in a sign or a verdict.
+- Section 4.2 refits the model across a hundred-fold range of the global scale
+  and the signal/noise verdicts hold.
+
+**Be ready for this at the oral.** A examiner who opens the appendix will find
+$1.21$ and ask about it. The honest answer is the one above; the dishonest
+answer would have been not to print the table.
+
+Build after issues 31 and 32: **30 pages, 0 errors, 0 unresolved references,
+0 multiply-defined labels, 0 missing graphics.** The six extra pages are all
+appendix.
