@@ -229,4 +229,14 @@ without the structural-zero rows strengthened it rather than weakening it, so
 we report it as an open question. Three limitations are worth naming. The
 structural zeros were flagged and tested but not modelled with a zero-inflated
 likelihood; $n \approx 1200$ is modest for twenty-two predictors, which is why
-several effects are borderline.
+several effects are borderline; and three of the horseshoe's local scales did
+not reach the conventional convergence threshold
+(Appendix~\ref{app:horseshoe_convergence}). Tripling the chain length left them
+unchanged, so this is weak identification rather than insufficient sampling:
+for a covariate the data barely constrains, the amount of shrinkage applied to
+it is itself barely constrained. The coefficients those scales act on did
+converge, and the sensitivity analysis of
+Section~\ref{sec:sens-horseshoe} shows the signal/noise verdicts survive a
+hundred-fold change in the global scale, so the conclusions above stand; but
+the precise shrinkage weight of three weak covariates should not be read to
+three decimals.

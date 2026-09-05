@@ -4,7 +4,7 @@ Every number in the report was checked against the `.rds` files the code writes,
 and every claim in the prose against the data behind it. Three passes: the
 tables, then ten structural sweeps, then the reasoning.
 
-**32 issues found. All 32 are applied.** Numbered below so they can be referred
+**33 issues found. All 33 are applied.** Numbered below so they can be referred
 to individually.
 
 The report compiles at **30 pages**, 0 LaTeX errors, 0 duplicate labels, 0
@@ -12,7 +12,7 @@ unresolved references, 0 unresolved citations. Every float is referred to
 somewhere in the prose. Every number was read back out of the `.rds` files
 after the 5 September re-runs.
 
-Sections 26 to 32 were added after the original 25 and cover the longer chains,
+Sections 26 to 33 were added after the original 25 and cover the longer chains,
 the 04b/04d re-runs, the MCMC settings tables, the figures, and the horseshoe
 convergence appendix.
 
@@ -699,3 +699,46 @@ answer would have been not to print the table.
 Build after issues 31 and 32: **30 pages, 0 errors, 0 unresolved references,
 0 multiply-defined labels, 0 missing graphics.** The six extra pages are all
 appendix.
+
+---
+
+# 33. The convergence caveat reaches the conclusions
+
+Issues 31 and 32 put the three imperfectly converged local scales into the
+appendix and into Chapter 3. The place a marker actually looks first -- the
+limitations paragraph in the conclusions -- still did not mention it.
+
+Adding it also fixed a counting error that was already there.
+
+| # | Title | Before | After | Reason |
+|---|---|---|---|---|
+| 33 | "Three limitations" followed by two | `Three limitations are worth naming. The structural zeros were flagged and tested but not modelled with a zero-inflated likelihood; $n \approx 1200$ is modest for twenty-two predictors, which is why several effects are borderline.` | Same opening, then the two existing limitations, then: `and three of the horseshoe's local scales did not reach the conventional convergence threshold (Appendix~\ref{app:horseshoe_convergence}). Tripling the chain length left them unchanged, so this is weak identification rather than insufficient sampling: for a covariate the data barely constrains, the amount of shrinkage applied to it is itself barely constrained. The coefficients those scales act on did converge, and the sensitivity analysis of Section~\ref{sec:sens-horseshoe} shows the signal/noise verdicts survive a hundred-fold change in the global scale, so the conclusions above stand; but the precise shrinkage weight of three weak covariates should not be read to three decimals.` | The sentence promised three limitations and named two. The convergence caveat is the natural third, so one edit closes both. |
+
+## Why this wording
+
+"We needed more iterations" reads as unfinished work. "The parameter is weakly
+identified by the data" is a statistical observation, and it is the one the
+evidence supports: the chains were tripled in length and the scale reduction
+factors did not move, while every effective sample size roughly tripled. That
+comparison is measurable from the repository -- the pre-change
+`data/03_horseshoe_final.rds` in commit `483d283` has 9999 draws with ESS
+running 1211 to 8026, against 30000 draws and 3389 to 23103 now.
+
+The old $\hat{R}$ values themselves cannot be recovered: `.rds` stores the
+combined draws, and $\hat{R}$ needs the chains kept apart. The knitted HTML
+only entered version control after the chains were lengthened, so both tracked
+copies already show `iter = 30000`. Recovering the exact previous figure would
+mean re-running 03 at `iter = 10000`, about twenty minutes. Not done, and not
+needed for the claim being made.
+
+## A process note on the LaTeX builds
+
+Every build in this session was run twice, on the belief that `latexmk` needed a
+second invocation to settle cross-references. It does not -- it loops
+internally, three passes on this document, and finishes clean. The apparent
+evidence for the second run was a count of "undefined" across the whole log,
+which necessarily includes the intermediate passes where references are not yet
+resolved. Counting the final pass only shows zero.
+
+One invocation is enough. From scratch it takes 98 seconds; with nothing
+changed, 0.2.
