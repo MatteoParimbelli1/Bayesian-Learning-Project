@@ -229,3 +229,78 @@ Every number in the report has been checked against the `.rds` files the code
 writes: the five sensitivity tables row by row, all four odds ratios in Chapter
 3, the PSIS-LOO table, and every sample-size figure. The two that were wrong are
 fixed and listed above.
+
+---
+
+# Third pass: the reasoning, not the tables
+
+Forty-nine claims were extracted from the prose, every sentence containing a
+superlative, a ranking, a count or a quantifier, and each was checked against the
+data. Four were wrong.
+
+## Wrong
+
+**Chapter 3 ranked the effects incorrectly.** The text said "by far the largest
+is the class" and called Seat comfort "the second strongest driver". By
+magnitude the order is customer loyalty ($\bar\beta = -1.83$), then Business
+class ($+1.45$), then Seat comfort ($+0.63$). Loyalty is the largest effect and
+Seat comfort is third. The paragraph did mention loyalty, but two sentences
+later and as an afterthought. Rewritten to give the real order, with the
+coefficients quoted so the ranking can be checked at a glance.
+
+**Table 3 named the wrong variable.** One row read "Arrival delay residual
+(signed-log)". The model uses `log_mid_delay`, the plain signed-log difference
+between arrival and departure delay. The residual is the alternative Appendix A
+explicitly rejects, so the table advertised a variable the project decided
+against. The value, $-0.041$, was right; only the label was wrong. The prose
+repeated the error two paragraphs later, calling it the "mid-flight delay
+residual"; it is not a residual.
+
+**The conclusions put three unrelated items in one cluster.** The text had
+*Inflight entertainment*, *Inflight wifi service* and *Gate location* "sitting in
+the same correlated clusters". They do not:
+
+| | entertainment | wifi | gate location |
+|---|---|---|---|
+| entertainment | 1.00 | 0.31 | **-0.06** |
+| wifi | 0.31 | 1.00 | **0.03** |
+
+Gate location correlates with `food_drink` (0.51) and `time_convenient` (0.52),
+so it belongs to the seat/catering/ground cluster that Section 5.3 describes
+correctly. Wifi belongs to the booking cluster, where it correlates 0.67 with
+`Online boarding`. The sentence merged three separate clusters into one.
+Rewritten around the one comparison that holds.
+
+**The same sentence mis-ranked two effects.** It read "Customer loyalty is the
+strongest ... *Business* class follows". Business is third: loyalty
+($\kappa_j = 0.070$), then Inflight entertainment ($0.171$), then Business
+($0.186$). Entertainment and Business are effectively tied, $0.906$ against
+$0.898$ in coefficient, so the fix says so rather than inventing a gap.
+
+## Checked and correct
+
+Every remaining claim holds:
+
+- *Departure/Arrival time convenient* does have the largest share of structural
+  zeros, 6.3%, and does sit in a cluster with Gate location (0.52), Food and
+  drink (0.48) and Seat comfort (0.35).
+- The eleven covariates listed as signal at $s = 1$ are exactly the eleven with
+  $\kappa_j < 0.5$.
+- *disloyal Customer* is the least shrunk coefficient at all three global scales,
+  0.052, 0.071 and 0.076.
+- Business, entertainment and loyalty are indeed the three least shrunk.
+- *Inflight entertainment* is the best-preserved of the fourteen service items.
+- The largest movement across global scales is 0.018; the largest across prior
+  variances is 0.066; exactly one predictor of twenty-two changes verdict.
+- 129,880 records and 22 columns in the raw file; classes split 54.7 / 45.3; the
+  training base rate is 0.546; the held-out set is 128,274 rows.
+- Every odds ratio and credible interval quoted in Chapter 3.
+- Every calibration decile, the AUC of 0.900, the Brier score of 0.126 and the
+  accuracy of 82.8%.
+
+## No fabrications
+
+Nothing in the report describes a quantity the code does not compute. The four
+errors were all misreadings of real output: a ranking taken from the wrong
+column, a label carried over from a variable that was dropped, and a cluster
+claim that was never checked against the correlation matrix.

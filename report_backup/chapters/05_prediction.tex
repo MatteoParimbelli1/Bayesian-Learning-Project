@@ -211,11 +211,11 @@ independent cross-check. All posteriors were sampled by MCMC in JAGS.
 
 Three effects dominate and survive every specification. Customer loyalty is the
 strongest by a wide margin and the least shrunk coefficient at every global
-scale tested, \emph{Business} class follows, and among the fourteen service
-items \emph{Inflight entertainment} is the one the prior preserves most
-clearly, while \emph{Inflight wifi service} and \emph{Gate location} are
-heavily shrunk despite sitting in the same correlated clusters. That asymmetry
-is what the horseshoe was chosen for.
+scale tested; \emph{Inflight entertainment} and \emph{Business} class follow,
+essentially tied ($\kappa_j = 0.17$ and $0.19$). Entertainment is the service
+item the prior preserves most clearly, while \emph{Inflight wifi service} is
+heavily shrunk despite correlating at $0.67$ with \emph{Online boarding} inside
+the same booking cluster. That asymmetry is what the horseshoe was chosen for.
 
 These conclusions are not artefacts of our modelling choices. The vague-prior
 posterior moves by at most $0.066$ across four orders of magnitude of prior

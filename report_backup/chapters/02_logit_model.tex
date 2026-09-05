@@ -150,7 +150,7 @@ posterior mean, the $95\%$ credible interval on the log-odds scale
     Seat comfort                         & $0.632$  & $0.485$  & $0.768$  & $1.881$ & $1.625$ & $2.156$ \\
     Class: Eco Plus (vs Eco)             & $0.050$  & $-0.441$ & $0.524$  & $1.052$ & $0.643$ & $1.688$ \\
     Age                                  & $-0.026$ & $-0.164$ & $0.127$  & $0.975$ & $0.848$ & $1.135$ \\
-    Arrival delay residual (signed-log)  & $-0.041$ & $-0.187$ & $0.111$  & $0.960$ & $0.830$ & $1.118$ \\
+    Mid-flight delay (signed-log)        & $-0.041$ & $-0.187$ & $0.111$  & $0.960$ & $0.830$ & $1.118$ \\
     Flight distance                      & $-0.052$ & $-0.185$ & $0.090$  & $0.949$ & $0.831$ & $1.094$ \\
     Intercept                            & $-0.105$ & $-0.400$ & $0.180$  & $0.901$ & $0.670$ & $1.198$ \\
     Personal Travel (vs Business travel) & $-0.168$ & $-0.498$ & $0.166$  & $0.846$ & $0.608$ & $1.181$ \\
@@ -161,21 +161,22 @@ posterior mean, the $95\%$ credible interval on the log-odds scale
   }
 \end{table}
 
-Four effects clearly separate from the ``no-effect'' line (OR $=1$). By far the
-largest is the class: travelling in \textit{Business} rather than
-\textit{Eco} multiplies the odds of being satisfied by roughly $4.3$
-($95\%$ CI $[3.07, 6.08]$), even after adjusting for all the other covariates.
-\textit{Seat comfort} is the second strongest driver
-(OR $\approx 1.88$ per standard deviation, $[1.63, 2.16]$): more comfortable
-seating is strongly associated with satisfaction. In the opposite direction, a
+Four effects clearly separate from the ``no-effect'' line (OR $=1$). The
+largest in magnitude is customer loyalty, and it runs negative: a
 \textit{disloyal customer} has markedly lower odds of being satisfied
-(OR $\approx 0.16$, $[0.11, 0.24]$), and a longer departure delay reduces them
-too (OR $\approx 0.80$ per unit of $\log(1+\text{delay})$, $[0.69, 0.93]$).
+(OR $\approx 0.16$, $[0.11, 0.24]$, i.e.\ $\bar\beta = -1.83$). Cabin class
+comes next: travelling in \textit{Business} rather than \textit{Eco}
+multiplies the odds by roughly $4.3$ ($95\%$ CI $[3.07, 6.08]$,
+$\bar\beta = +1.45$), even after adjusting for all the other covariates.
+\textit{Seat comfort} follows (OR $\approx 1.88$ per standard deviation,
+$[1.63, 2.16]$): more comfortable seating is strongly associated with
+satisfaction. A longer departure delay reduces the odds too
+(OR $\approx 0.80$ per unit of $\log(1+\text{delay})$, $[0.69, 0.93]$).
 
 The remaining covariates have credible intervals that comfortably include $1$
 and cannot be called confident drivers on their own: \textit{Eco Plus} is
 statistically indistinguishable from \textit{Eco}, while \textit{age},
-\textit{flight distance} and the \textit{mid-flight delay residual} all show
+\textit{flight distance} and the \textit{mid-flight delay} all show
 weak, uncertain effects.
 
 The most instructive case is the \textit{type of travel}. In the exploratory
