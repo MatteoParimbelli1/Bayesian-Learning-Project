@@ -742,3 +742,29 @@ resolved. Counting the final pass only shows zero.
 
 One invocation is enough. From scratch it takes 98 seconds; with nothing
 changed, 0.2.
+
+---
+
+# Layout pass, 5 September night
+
+Layout only. No number in the report changed.
+
+- Removed a duplicated "Horseshoe shrinkage weights" section in the horseshoe
+  appendix. It had been added twice and produced four duplicate labels.
+- Fixed Figure 1 and Table 1 sitting alone on a page of their own: Chapter 1
+  now uses `\input` like the other chapters, and the float thresholds in the
+  preamble were loosened.
+- Set every table one size down with `\small`. Tables that already declared a
+  smaller size keep it. Note that `\AtBeginEnvironment{table}{\small}` does
+  not work for floats -- `\@floatboxreset` resets the size inside the box --
+  so it has to go inside each table.
+- Figure 2: subfigures (a) and (b) 30% smaller, (c) 30% bigger.
+
+30 pages to 29, build clean. Committed as `535e50f`.
+
+Two things left alone: six overfull `\hbox` warnings, all in body text rather
+than in tables, and the two moves still open in `TODO.md` (the logit MCMC
+settings table and the correlation matrix).
+
+Builds were run outside Google Drive, which corrupts LaTeX aux files and left
+`main.bbl-SAVE-ERROR` and an empty `main 2.pdf` behind.
