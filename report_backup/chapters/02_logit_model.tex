@@ -1,0 +1,178 @@
+\section{Logit model}
+\label{sec:logit}
+
+In this chapter we present the results obtained by fitting a simple Bayesian
+logistic regression on a reduced set of covariates. The aim is twofold: to
+establish a first, fully interpretable baseline for the satisfaction
+prediction problem introduced in Section \ref{sec:problem}, and to settle a
+few modelling choices (prior specification, encoding of the cabin class, MCMC
+setup) that will be reused by the richer shrinkage model of Section
+\ref{sec:regression}.
+
+\subsection{Covariates and prior specification}
+Following the suggestions of the brief, we fit the model on a compact subset of
+covariates, using the transformations motivated in the data-exploration phase
+(Section \ref{sec:data_expl}): \texttt{age}, \texttt{seat\_comfort},
+\texttt{flight\_distance}, \texttt{cabin\_class}, the log-transformed departure
+delay $\log(1+\texttt{dep\_delay})$ and the \texttt{signed-log mid-flight delay}, together
+with the two binary descriptors \texttt{travel\_type} and
+\texttt{customer\_type}. All continuous covariates are standardized
+(zero mean, unit variance) so that coefficients are expressed per standard deviation and the common prior variance is equally informative for every covariate. For the binary covariates the reference
+level is chosen as the majority group (\textit{Business travel} and
+\textit{Loyal customer}), so that each coefficient measures the effect of the
+minority condition relative to the typical customer.
+The model \ref{eq:logit_model} is still the same, just reduced at these variables.
+
+\paragraph{Prior specification.}
+Since we have no strong prior belief on the magnitude or the sign of the
+coefficients, and because standardisation already puts every covariate on a
+comparable scale, we adopt independent, weakly informative Gaussian priors on
+all the parameters:
+\begin{equation}
+    \beta_0 \sim \mathcal{N}(0, 100), \qquad
+    \beta_j \sim \mathcal{N}(0, 100) \;\; (j = 1,\dots,P), \qquad
+    \beta_{\text{mid}} \sim \mathcal{N}(0, 100).
+    \label{eq:priors}
+\end{equation}
+Here the second argument denotes the prior \emph{variance} $\sigma^2 = 100$
+(equivalently a precision $\tau = 1/\sigma^2 = 0.01$ in the JAGS
+parametrisation). On the logit scale a standard deviation of $10$ is very
+diffuse: it places essentially no informative constraint on plausible
+coefficient values while still being proper, so the posterior is driven mostly by the
+likelihood, and the resulting estimates remain directly comparable to a
+maximum-likelihood fit. This choice reflects our lack of prior information and
+keeps the baseline model as neutral as possible.
+
+\subsection{Encoding of the flight class}
+Before committing to the model we address a small preliminary question: is it
+preferable to encode \texttt{class} as a pair of dummy variables
+(\textit{Eco Plus} and \textit{Business}, with \textit{Eco} as reference) or as a
+single centred ordinal score ($1/2/3$)? To decide, we fit the model
+\eqref{eq:priors} under both encodings and compare them with the Widely
+Applicable Information Criterion (WAIC), computed from the pointwise
+log-likelihood of the MCMC draws.
+
+The dummy encoding attains the lower WAIC ($1373.2$ against $1379.1$ for the
+ordinal one), i.e. a slightly better expected predictive fit. The difference in
+expected log predictive density is $\Delta\text{elpd} = -3$ with a standard
+error of $2.7$, so the preference, although real, is smaller than two standard
+errors and therefore modest. Because \texttt{class} is genuinely
+\emph{nominal} rather than an equally-spaced ordinal scale, and because the
+dummy specification is both more flexible and lets us report a separate,
+directly interpretable odds ratio for each class, we adopt the dummy encoding
+for the rest of the analysis. To verify that this in-sample preference is not an artefact of the modest
+training size ($n=1200$), we re-score both encodings on the held-out test
+set ($n\approx128{,}000$ customers), using the posterior-mean predictive
+probability $\hat p_i = S^{-1}\sum_{s=1}^{S}\mathrm{logit}^{-1}\!\left(\hat\beta_0^{(s)} + x_i\hat\beta^{(s)}\right)$
+obtained from the already-fitted MCMC draws (without additional sampling). The dummy encoding again outperforms the ordinal one on all three
+out-of-sample scoring rules considered: log-loss (0.557 against 0.562),
+Brier score (0.187 against 0.190), and AUC (0.786 against 0.781). Since the
+WAIC-based preference is corroborated out-of-sample, we treat the encoding
+choice as settled.
+
+\subsection{MCMC setup and convergence}
+Posterior inference is carried out via MCMC in JAGS. Table
+\ref{tab:mcmc_settings} summarises the choices on the chain parameters.
+
+\begin{table}[htbp]
+  \centering
+  \caption{MCMC settings used for the logit model}
+  \label{tab:mcmc_settings}
+  \begin{tabular}{lr}
+    \toprule
+    Setting & Value \\
+    \midrule
+    Chains            & 3 \\
+    Adaptation        & 1500 \\
+    Burn-in           & 1000 \\
+    Iterations (kept) & 6000\\
+    Thinning          & 7 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Convergence was satisfactory for all parameters. The Gelman--Rubin potential
+scale reduction factors are essentially $1$ (point estimates $1$,
+upper confidence limits capped at 1.01, multivariate PSRF $= 1$), the trace
+plots show well-mixed, stationary chains, and
+the autocorrelation decays quickly to zero within a few,small lags . The
+effective sample sizes range from $1123.153$ to up to $2799.333$, which is adequate for
+stable posterior summaries. The complete convergence assessment
+(trace plots, autocorrelation functions and the full diagnostic tables) is
+deferred to Appendix \ref{app:logit_convergence}.
+
+\subsection{Posterior results}
+Figures for the posterior densities of the coefficients and the odds-ratio
+forest plot are collected below; the corresponding numerical summaries are
+reported in Table \ref{tab:or_logit}. For each coefficient we report the
+posterior mean, the $95\%$ credible interval on the log-odds scale
+($\beta$) and the same quantities transformed to the odds-ratio scale
+($\text{OR} = e^{\beta}$), which is the natural scale for interpretation.
+
+% -----------------------------------------------------------------------------
+% Figures intentionally omitted for now (text-only draft).
+% Available knitted plots to insert later:
+%   - Posterior densities, continuous coefficients (mcmc_areas group 1)
+%   - Posterior densities, cabin-class dummies    (mcmc_areas group 2)
+%   - Posterior densities, binary + intercept      (mcmc_areas group 3)
+%   - Odds-ratio forest plot (95% credible intervals, log scale)
+% -----------------------------------------------------------------------------
+
+\begin{table}[htbp]
+  \centering
+\small
+  \caption{Posterior summaries of the logit coefficients and their odds ratios,
+           sorted by decreasing OR. CIs are $95\%$ credible intervals.}
+  \label{tab:or_logit}
+  \resizebox{0.72\linewidth}{!}{%
+  \setlength{\tabcolsep}{4pt}
+\begin{tabular}{lrrrrrr}
+    \toprule
+    Term & $\bar\beta$ & $\beta_{2.5\%}$ & $\beta_{97.5\%}$ & OR & OR$_{2.5\%}$ & OR$_{97.5\%}$ \\
+    \midrule
+    Class: Business (vs Eco)             & $1.450$  & $1.120$  & $1.804$  & $4.265$ & $3.065$ & $6.075$ \\
+    Seat comfort                         & $0.632$  & $0.485$  & $0.768$  & $1.881$ & $1.625$ & $2.156$ \\
+    Class: Eco Plus (vs Eco)             & $0.050$  & $-0.441$ & $0.524$  & $1.052$ & $0.643$ & $1.688$ \\
+    Age                                  & $-0.026$ & $-0.164$ & $0.127$  & $0.975$ & $0.848$ & $1.135$ \\
+    Arrival delay residual (signed-log)  & $-0.041$ & $-0.187$ & $0.111$  & $0.960$ & $0.830$ & $1.118$ \\
+    Flight distance                      & $-0.052$ & $-0.185$ & $0.090$  & $0.949$ & $0.831$ & $1.094$ \\
+    Intercept                            & $-0.105$ & $-0.400$ & $0.180$  & $0.901$ & $0.670$ & $1.198$ \\
+    Personal Travel (vs Business travel) & $-0.168$ & $-0.498$ & $0.166$  & $0.846$ & $0.608$ & $1.181$ \\
+    $\log(1+\text{Departure Delay})$     & $-0.230$ & $-0.371$ & $-0.078$ & $0.795$ & $0.690$ & $0.925$ \\
+    disloyal Customer (vs Loyal)         & $-1.825$ & $-2.253$ & $-1.431$ & $0.161$ & $0.105$ & $0.239$ \\
+    \bottomrule
+  \end{tabular}%
+  }
+\end{table}
+
+% postpone this 'till re-run
+Four effects clearly separate from the ``no-effect'' line (OR $=1$). By far the
+largest is the class: travelling in \textit{Business} rather than
+\textit{Eco} multiplies the odds of being satisfied by roughly $4.3$
+($95\%$ CI $[3.07, 6.08]$), even after adjusting for all the other covariates.
+\textit{Seat comfort} is the second strongest driver
+(OR $\approx 1.88$ per standard deviation, $[1.63, 2.16]$): more comfortable
+seating is strongly associated with satisfaction. In the opposite direction, a
+\textit{disloyal customer} has markedly lower odds of being satisfied
+(OR $\approx 0.16$, $[0.11, 0.24]$), and a longer departure delay reduces them
+too (OR $\approx 0.80$ per unit of $\log(1+\text{delay})$, $[0.69, 0.93]$).
+
+The remaining covariates have credible intervals that comfortably include $1$
+and cannot be called confident drivers on their own: \textit{Eco Plus} is
+statistically indistinguishable from \textit{Eco}, while \textit{age},
+\textit{flight distance} and the \textit{mid-flight delay residual} all show
+weak, uncertain effects.
+
+%The most instructive case is the \texttt{type of travel}. In the exploratory
+%analysis personal-travel customers appeared markedly less satisfied, an almost
+%certain marginal association; here, once cabin class and the other covariates
+%are held fixed, the credible interval for \textit{Personal Travel}
+%($0.61$ to $1.18$) comes close to, but no longer excludes, $1$. This is exactly
+%the confounding anticipated in Section \ref{sec:data_expl}: business travellers
+%are disproportionately booked in Business class, so once class enters the model
+%directly it absorbs most of the apparent travel-type effect. Both the borderline
+%effects (flight distance, departure delay) and this partially-explained
+%travel-type signal motivate the richer specification of Section
+%\ref{sec:regression}, where the full battery of $14$ service-quality ratings is
+%added under a shrinkage prior to clarify which of these effects survive
+%alongside the stronger, correlated service signals.

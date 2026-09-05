@@ -1,0 +1,127 @@
+\documentclass[10pt, a4paper]{article}
+
+%---------------- Fonts (Times-like serif) --------------------
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{mathptmx}                 % Times text + math
+\usepackage[scaled=0.9]{helvet}       % Helvetica for sans elements
+\usepackage{siunitx} % For 'S' column in tabular
+
+%---------------- Page geometry -------------------------------
+\usepackage[a4paper,top=2.2cm,bottom=2.2cm,left=1.8cm,right=1.8cm]{geometry}
+
+%---------------- Colours (from the slide deck) ---------------
+\usepackage{xcolor}
+\definecolor{polinavy}{HTML}{022E55}   % primary deep navy
+\definecolor{poliblue}{HTML}{0460B4}   % bright accent blue
+\definecolor{polisteel}{HTML}{6DA4BA}  % steel-blue accent
+\definecolor{polirule}{HTML}{C9D6E0}   % light rule
+
+%---------------- Misc packages -------------------------------
+\usepackage{titlesec}
+\usepackage{abstract}
+\usepackage{fancyhdr}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{caption}
+\usepackage{enumitem}
+\usepackage{amsmath,amssymb}
+\usepackage[colorlinks=true,linkcolor=polinavy,citecolor=poliblue,
+            urlcolor=poliblue]{hyperref}
+\usepackage[titletoc,title]{appendix}
+\usepackage{subcaption}
+
+%---------------- Section heading styling ---------------------
+\titleformat{\section}
+  {\normalfont\large\bfseries\color{polinavy}}
+  {\thesection.}{0.5em}{}
+\titleformat{\subsection}
+  {\normalfont\normalsize\bfseries\color{poliblue}}
+  {\thesubsection}{0.5em}{}
+\titlespacing*{\section}{0pt}{1.4ex plus .3ex}{0.9ex}
+\titlespacing*{\subsection}{0pt}{1.1ex plus .2ex}{0.6ex}
+
+%---------------- Caption styling -----------------------------
+\captionsetup{font=small,labelfont={bf,color=polinavy},
+              labelsep=period,skip=5pt}
+
+%---------------- Headers / footers ---------------------------
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\headrule}{\hbox to\headwidth{\color{polisteel}%
+  \leaders\hrule height \headrulewidth\hfill}}
+\fancyhead[L]{\footnotesize\color{polinavy}\scshape
+  Airline Customer Satisfaction}
+\fancyhead[R]{\footnotesize\color{polinavy}\thepage}
+
+%---------------- Abstract styling ----------------------------
+\renewcommand{\abstractnamefont}{\normalfont\bfseries\color{polinavy}}
+\renewcommand{\abstracttextfont}{\normalfont\small\itshape}
+
+%---------------- Bibliography --------------------------------
+\usepackage[
+    backend=biber,
+    style=ieee
+]{biblatex}
+\addbibresource{biblio.bib}
+
+%==============================================================
+\begin{document}
+
+%---------------- Title page ----------------------------------
+% No header or page number on the title page; the body starts at page 1.
+\pagenumbering{gobble}
+\thispagestyle{empty}
+\vspace*{\fill}
+
+%---------------- Title banner (slide-style) ------------------
+\begin{center}
+    {\color{polinavy}\rule{\textwidth}{2.2pt}}\par\vspace{1.0ex}
+    {\Huge\bfseries\color{polinavy} Airline customer satisfaction: a bayesian prediction model\par}
+    \vspace{0.8ex}
+    \vspace{0.6ex}
+    {\color{polinavy}\rule{\textwidth}{0.8pt}}\par\vspace{1.4ex}
+    {\normalsize
+      Guglielmi Leonardo \quad\textbullet\quad Marian Sorin Nicu \quad\textbullet\quad Parimbelli Matteo \par}
+    \vspace{0.3ex}
+    {\footnotesize\color{polinavy!80}
+      Bayesian Learning and Montecarlo Simulations - Federico Bassetti \\
+      Academic Year 2025 -- 2026\par}
+    \vspace{1.6ex}
+\end{center}
+
+%---------------- Abstract ------------------------------------
+\begin{abstract}
+In this project we define and fit a Bayesian prediction model for the
+satisfaction level of customers of an undisclosed airline, based on a set of
+flight characteristics. Model parameters are derived using MCMC methods via the
+JAGS tool. We compare a logistic regression under weakly informative priors
+against a horseshoe shrinkage prior over 22 predictors, assess both with WAIC
+and PSIS-LOO, and validate the selected model on a held-out set of
+\num{128274} customers.
+\end{abstract}
+
+\vspace*{\fill}
+\newpage
+
+\thispagestyle{empty}
+\tableofcontents
+\newpage
+\pagenumbering{arabic}
+
+\include{chapters/00_prob_desc_data_expl}
+\input{chapters/01_model}
+\input{chapters/02_logit_model}
+\input{chapters/03_horseshoe_model}
+\input{chapters/04_sensitivity}
+\input{chapters/05_prediction}
+
+\begin{appendices}
+\include{appendix/data_aug}
+\include{appendix/logit_convergence}
+\include{appendix/bas_comparison}
+\end{appendices}
+
+\printbibliography
+\end{document}
