@@ -172,3 +172,60 @@ The factor levels at `deliver/01_data_exploration.Rmd:42`, recorded in TODO.md.
 one of the stratification variables, a different machine draws a different
 train/test split: 508 of 1213 rows in common when tested. Two lines to fix, but
 it changes the results unless the current order is pinned.
+
+---
+
+# Before submitting
+
+## Someone has to check these; I could not
+
+- **The seven new bibliography entries.** Authors, titles, years and journals I
+  am confident about; volume and page numbers came from memory, not from the
+  papers. Ten minutes on Google Scholar settles it. They are in `biblio.bib`:
+  `carvalho2010horseshoe`, `vehtari2017loo`, `watanabe2010waic`,
+  `clyde2011bas`, `gelman1992rubin`, `brier1950`, `plummer2003jags`.
+- **The three generated appendices** (feature selection, parameter-space
+  convergence, BAS vs horseshoe). Nobody on the team has read them.
+- **Whether `.Rmd` counts as the code deliverable**, or whether plain `.R` is
+  expected. Worth one question to the professor.
+
+## Page count
+
+The body is 15 printed pages against a target of 8 to 10. TODO.md lists what
+could still come out, roughly four pages' worth, ranked by how little is lost:
+Table 8 (`tab:hs-signal`) is `tab:hs-kappa` with a threshold applied and carries
+no information of its own; Table 6 can drop to the ten rows the prose actually
+discusses; and four subsections run 40 to 52 lines each for conclusions that are
+a sentence long.
+
+## What to upload to Overleaf
+
+Everything below is in `report_backup/`, same paths.
+
+| file | why |
+|---|---|
+| `biblio.bib` | seven new entries |
+| `chapters/00_prob_desc_data_expl.tex` | hardcoded "Appendix A", JAGS citation |
+| `chapters/02_logit_model.tex` | $n=1200 \to 1213$, tau collision, two citations |
+| `chapters/03_horseshoe_model.tex` | the two false claims, notation, horseshoe citation |
+| `chapters/04_sensitivity.tex` | citation moved out of a heading, capitalisation |
+| `chapters/05_prediction.tex` | notation, two unreferenced floats |
+| `appendix/bas_comparison.tex` | five duplicate labels removed, BAS citation |
+| `appendix/data_aug.tex` | two typos, `Tab.~\ref` spacing |
+
+`main.tex` and the images are unchanged.
+
+**Careful:** the team edits the same project. Two rounds of work have already
+been lost to a download overwriting local edits, and the five duplicate labels
+existed because an earlier round of moves was uploaded and then half reverted.
+Check what is in Overleaf before overwriting anything.
+
+## State at the end of this audit
+
+22 pages. No LaTeX errors, no unresolved references, no unresolved citations, no
+duplicate labels, and every float referred to somewhere in the prose.
+
+Every number in the report has been checked against the `.rds` files the code
+writes: the five sensitivity tables row by row, all four odds ratios in Chapter
+3, the PSIS-LOO table, and every sample-size figure. The two that were wrong are
+fixed and listed above.
