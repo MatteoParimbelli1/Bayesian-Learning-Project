@@ -192,6 +192,7 @@ cmp_methods <- data.frame(term = hs_names_raw,
 cmp_methods$signal_BAS <- cmp_methods$PIP > 0.5
 cmp_methods$signal_HS  <- cmp_methods$kappa < 0.5
 cmp_methods$agree <- cmp_methods$signal_BAS == cmp_methods$signal_HS
+cmp_methods %>% filter(!agree)
 agreement_rate <- mean(cmp_methods$agree)
 print("two methods agreement rate is: ")
 agreement_rate
@@ -200,11 +201,13 @@ agreement_rate
 ```{r hs-comparison-plot, fig.width=7, fig.height=6}
 cmp_methods %>%
   mutate(term = factor(term, levels = term[order(PIP)])) %>%
-  ggplot(aes(x = PIP, y = 1 - kappa, color = agree)) +
-  geom_point(size = 2.5) +
+  ggplot(aes(x = PIP, y = 1 - kappa, color = agree, shape = agree)) +
+  geom_point(size = 3) +
   geom_hline(yintercept = 0.5, linetype = "dashed", color = "grey60") +
   geom_vline(xintercept = 0.5, linetype = "dashed", color = "grey60") +
-  scale_color_manual(values = c("TRUE" = "#3B6D11", "FALSE" = "#D85A30"),
+  scale_color_manual(values = c("TRUE" = "#0072B2", "FALSE" = "#D55E00"),
+                      labels = c("TRUE" = "Agree", "FALSE" = "Disagree"), name = NULL) +
+  scale_shape_manual(values = c("TRUE" = 16, "FALSE" = 17),
                       labels = c("TRUE" = "Agree", "FALSE" = "Disagree"), name = NULL) +
   labs(title = "BAS posterior inclusion probability vs. horseshoe (1 - kappa)",
        subtitle = sprintf("%.0f%% agreement on signal (>0.5) vs. noise (<=0.5)", 100*agreement_rate),
