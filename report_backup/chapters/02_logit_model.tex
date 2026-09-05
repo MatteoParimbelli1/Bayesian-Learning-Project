@@ -50,7 +50,7 @@ all the parameters:
     \label{eq:priors}
 \end{equation}
 Here the second argument denotes the prior \emph{variance} $\sigma^2 = 100$
-(equivalently a precision $\tau = 1/\sigma^2 = 0.01$ in the JAGS
+(equivalently a precision $1/\sigma^2 = 0.01$ in the JAGS
 parametrisation). On the logit scale a standard deviation of $10$ is very
 diffuse: it places essentially no informative constraint on plausible
 coefficient values while still being proper, so the posterior is driven mostly by the
@@ -64,7 +64,7 @@ preferable to encode \texttt{class} as a pair of dummy variables
 (\textit{Eco Plus} and \textit{Business}, with \textit{Eco} as reference) or as a
 single centred ordinal score ($1/2/3$)? To decide, we fit the model
 \eqref{eq:priors} under both encodings and compare them with the Widely
-Applicable Information Criterion (WAIC), computed from the pointwise
+Applicable Information Criterion (WAIC) \cite{watanabe2010waic}, computed from the pointwise
 log-likelihood of the MCMC draws.
 
 The dummy encoding attains the lower WAIC ($1373.2$ against $1379.6$ for the
@@ -76,12 +76,12 @@ errors and therefore modest. Because \texttt{class} is genuinely
 dummy specification is both more flexible and lets us report a separate,
 directly interpretable odds ratio for each class, we adopt the dummy encoding
 for the rest of the analysis. To verify that this in-sample preference is not an artefact of the modest
-training size ($n=1200$), we re-score both encodings on the held-out test
+training size ($n=1213$), we re-score both encodings on the held-out test
 set ($n\approx128{,}000$ customers), using the posterior-mean predictive
 probability $\hat p_i = S^{-1}\sum_{s=1}^{S}\mathrm{logit}^{-1}\!\left(\hat\beta_0^{(s)} + x_i\hat\beta^{(s)}\right)$
 obtained from the already-fitted MCMC draws (without additional sampling). The dummy encoding again outperforms the ordinal one on all three
 out-of-sample scoring rules considered: log-loss (0.557 against 0.562),
-Brier score (0.187 against 0.190), and AUC (0.786 against 0.781). Since the
+Brier score \cite{brier1950} (0.187 against 0.190), and AUC (0.786 against 0.781). Since the
 WAIC-based preference is corroborated out-of-sample, we treat the encoding
 choice as settled.
 
@@ -106,7 +106,7 @@ Posterior inference is carried out via MCMC in JAGS. Table
   \end{tabular}
 \end{table}
 
-Convergence was satisfactory for all parameters. The Gelman--Rubin potential
+Convergence was satisfactory for all parameters. The Gelman--Rubin \cite{gelman1992rubin} potential
 scale reduction factors are essentially $1$ (point estimates $1.00$--$1.01$,
 upper confidence limits up to $1.02$, multivariate PSRF $= 1.01$), the trace
 plots show well-mixed, stationary chains overlapping around a common region, and

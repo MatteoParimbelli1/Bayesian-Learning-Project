@@ -29,7 +29,7 @@ pushing every retained draw through the inverse link and averaging:
   \frac{1}{S}\sum_{s=1}^{S}
   \operatorname{logit}^{-1}\!\Bigl(
       \beta_0^{(s)} + \tilde{x}_i^{\top}\beta^{(s)}
-      + \beta_{\text{arr}}^{(s)}\,\texttt{arr\_delay}_i
+      + \beta_{\text{mid}}^{(s)}\,\texttt{midflight\_delay}_i
   \Bigr),
   \label{eq:postpred}
 \end{equation}
@@ -133,7 +133,8 @@ replications reproduce features of the real data the fit never targeted? For
 each posterior draw we simulate outcomes for the entire held-out set and
 recompute the satisfaction rate within each level of \texttt{Class},
 \texttt{Customer Type} and \texttt{Type of Travel}, giving a posterior
-predictive distribution per subgroup to compare the observed rate against.
+predictive distribution per subgroup, shown in Figure~\ref{fig:ppc}, to
+compare the observed rate against.
 
 \begin{figure}[htbp]
 \centering
@@ -168,7 +169,8 @@ at cutoff $t$ is
 \end{equation}
 estimated on the held-out set. Only the \emph{ratio} of the costs matters, so
 the airline need not price either error, just say how many wasted contacts it
-would trade for one retained customer.
+would trade for one retained customer. Table~\ref{tab:loss} gives the optimum
+at three such ratios.
 
 \begin{table}[htbp]
 \centering

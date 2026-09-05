@@ -11,7 +11,7 @@ signal for customer satisfaction, and which are redundant? Rather than answering
 this by hand, adding and removing covariates and guessing at their relevance, we
 prefer a principled, automatic mechanism. We therefore fit a Bayesian logistic
 regression on the \emph{full} set of covariates under a \textbf{horseshoe}
-shrinkage prior \cite{bl_book}, which is designed to pull the coefficients of
+shrinkage prior \cite{bl_book,carvalho2010horseshoe}, which is designed to pull the coefficients of
 noise predictors strongly towards zero while leaving genuine signals almost
 untouched. This lets the data, rather than our prior guesses, single out the
 meaningful covariates.
@@ -22,13 +22,13 @@ plus \texttt{age}, \texttt{flight\_distance}, the two cabin-class dummies
 (\textit{Eco Plus}, \textit{Business}), $\log(1+\texttt{dep\_delay})$,
 \textit{Personal Travel} and \textit{disloyal Customer} -- and, as in Section
 \ref{sec:logit}, the mid-flight delay is kept outside the design matrix with its
-own coefficient $\beta_{\text{arr}}$. The likelihood is again Bernoulli with a
+own coefficient $\beta_{\text{mid}}$. The likelihood is again Bernoulli with a
 logit link:
 \begin{equation}
     y_i \mid p_i \sim \text{Bernoulli}(p_i),
     \qquad
     \text{logit}(p_i) = \beta_0 + x_i^\top \beta
-        + \beta_{\text{arr}}\,\texttt{arr\_delay}_i .
+        + \beta_{\text{mid}}\,\texttt{midflight\_delay}_i .
     \label{eq:hs_model}
 \end{equation}
 
@@ -50,7 +50,7 @@ sparsity, while the heavy Cauchy tails of the local scales $\lambda_j$ let
 individual coefficients escape that shrinkage when the data demand it -- this is
 precisely the ``a few large, most near zero'' behaviour that makes the prior
 suited to feature selection. The arrival-delay coefficient
-$\beta_{\text{arr}}$ is given its own local scale $\lambda_{\text{arr}}$ under
+$\beta_{\text{mid}}$ is given its own local scale $\lambda_{\text{mid}}$ under
 the \emph{same} global $\tau$, so that it competes for signal on an equal footing
 with the other $21$ predictors. Following the JAGS notes, each half-Cauchy is
 implemented as a Student-$t$ with one degree of freedom truncated to the positive
@@ -97,8 +97,8 @@ single-core environment and could be extended on a larger machine.
 \end{table}
 
 Convergence was assessed separately for the two blocks of parameters, the
-regression coefficients $\{\beta_j, \beta_0, \beta_{\text{arr}}\}$ and the scale
-parameters $\{\lambda_j, \lambda_{\text{arr}}, \tau\}$, since the latter are the
+regression coefficients $\{\beta_j, \beta_0, \beta_{\text{mid}}\}$ and the scale
+parameters $\{\lambda_j, \lambda_{\text{mid}}, \tau\}$, since the latter are the
 harder to sample. For each block we inspected the Gelman--Rubin potential scale
 reduction factors, the effective sample sizes, and the trace and autocorrelation
 plots. The coefficients mix well and show scale-reduction factors close to $1$;
@@ -228,11 +228,4 @@ strongest and most confidently preserved effect in the entire model -- consisten
 across the exploratory analysis and both models of Sections \ref{sec:logit} and
 \ref{sec:regression}, regardless of how many other covariates are present.
 
-% -----------------------------------------------------------------------------
-% NOTE: the .Rmd conclusions quote exact posterior figures via inline `r ...`
-% code (specific kappa_j values, the Business/Personal-Travel/time-convenient
-% posterior means and 95% credible-interval endpoints). Those numbers come from
-% the knitted run and were not available when this draft was written, so they
-% are described qualitatively above. Fill in the precise values from the
-% kappa_tbl of notebook 03 (03_horseshoe_summary.rds) where desired.
 % -----------------------------------------------------------------------------

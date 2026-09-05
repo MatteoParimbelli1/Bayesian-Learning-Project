@@ -99,3 +99,76 @@ In Chapter 6, `1203` was corrected to `1213`, which fixes an error of mine; the
 training set does have 1213 records. The limitation about encoding and link
 choices being settled on training WAIC was removed, correctly, since
 out-of-sample validation was added for that section.
+
+---
+
+# Second pass, ten checks
+
+Ten separate sweeps over the report and the code, each looking for a different
+class of mistake.
+
+## Fixed
+
+**Cross-references.** Two floats were never referred to in the prose: Figure 9,
+the posterior predictive check, and Table 13, the loss-function cutoffs. Both
+now have a sentence pointing at them. Chapter 1 said "in Appendix~A" with the
+letter typed by hand, which breaks the moment an appendix is added or reordered;
+it is now `\ref{app:data_aug}`.
+
+**Notation: `\tau` meant two different things.** In Chapter 3 it was the JAGS
+precision, $1/\sigma^2 = 0.01$. In Chapters 4 and 5 it is the horseshoe global
+scale. Same symbol, unrelated quantities, adjacent chapters. Chapter 3 no longer
+names the precision.
+
+**Notation: one coefficient, two names.** Chapter 3 wrote $\beta_{\text{mid}}$
+with `midflight_delay`; Chapters 4 and 6 wrote $\beta_{\text{arr}}$ with
+`arr_delay`. Nine symbols unified on `mid`. That is the accurate name: the
+covariate is `log_mid_delay`, and `arr_delay` invites confusion with the arrival
+delay residual, which Appendix A explicitly rejects.
+
+**Citations.** The report used six standard methods and cited the source of none
+of them: the horseshoe (41 mentions, pointing only at the course book), PSIS-LOO,
+WAIC, BAS, Gelman-Rubin and the Brier score. Added Carvalho, Polson and Scott
+(2010); Vehtari, Gelman and Gabry (2017); Watanabe (2010); Clyde, Ghosh and
+Littman (2011); Gelman and Rubin (1992); Brier (1950); and Plummer (2003) for
+JAGS. The bibliography goes from 2 entries to 9, 8 of them cited. **Worth
+spot-checking the volume and page numbers before submission.**
+
+**Sample size.** Section 3.2 said the training size is $n = 1200$; it is 1213.
+
+**Typos.** `skeweness` twice and `covriates` once in Appendix A;
+`Disloyal Customer` capitalised in one table row where the other ten uses are
+lower case; `Tab.\ref` with no space, which renders as "Tab.13".
+
+**A leftover `% NOTE:` comment** in Chapter 4.
+
+**One I introduced and caught.** The PSIS-LOO citation first landed inside a
+`\subsection{}` heading, which would have carried it into the table of contents
+and the PDF bookmarks. Moved into the caption.
+
+## Checked and clean
+
+Every odds ratio quoted in Chapter 3 matches the posterior draws: Seat comfort
+1.88 [1.62, 2.16], disloyal Customer 0.16 [0.11, 0.24], departure delay 0.79
+[0.69, 0.93], Personal Travel [0.61, 1.18]. Bibliography keys all resolve, no
+entry is uncited. Every one of the six sections the brief requires is present,
+including model comparison, which is Section 5.5.
+
+The code: all eight files that draw random numbers set a seed, `bas.glm` is
+seeded before each call, there is no `install.packages` inside a chunk, no
+absolute paths, and the AUC rank statistic casts its class counts with
+`as.numeric()`.
+
+Matteo's out-of-sample validation checks out. His standardisation uses training
+means and standard deviations, and neither delay column has missing values, so
+nothing silently becomes `NA`. His prediction matrix reaches 1.3 GB at 1284
+draws by 128,274 rows, which is large but holds.
+
+## Still open
+
+The factor levels at `deliver/01_data_exploration.Rmd:42`, recorded in TODO.md.
+`Customer.Type` and `Type.of.Travel` are built with `factor()` and no explicit
+`levels`, so their order follows the machine's locale. Since `customer_type` is
+one of the stratification variables, a different machine draws a different
+train/test split: 508 of 1213 rows in common when tested. Two lines to fix, but
+it changes the results unless the current order is pinned.

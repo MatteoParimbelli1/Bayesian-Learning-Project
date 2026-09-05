@@ -4,7 +4,7 @@
 \subsection{Problem description}
 The goal of this project is to predict the level of customer satisfaction of an unspecified airline, given a set of covariates $X$ that describe several characteristics of the flight, such as service quality items, type of customer, departure delay and so on, and customer's opinion on the flight, like the rating given to some service quality items. Given the high degree of uncertainty inherent in personal opinions, we chose to adopt a Bayesian logistic regression model\cite{bl_book}. 
 %improve this
-The Bayesian coefficients are estimated via Markov Chain Monte Carlo (MCMC) methods via JAGS tool.
+The Bayesian coefficients are estimated via Markov Chain Monte Carlo (MCMC) methods, sampled in JAGS \cite{plummer2003jags} via JAGS tool.
 
 \subsection{Dataset description}
 
@@ -59,7 +59,7 @@ of the flight. They are treated as continuous variables. Variable list:
 \end{itemize}
 
 Further details on missing-data handling and the delay transformations are given
-in Appendix~A.
+in Appendix~\ref{app:data_aug}.
 
 \subsection{Dataset exploration}
 \label{sec:data_expl}
