@@ -73,6 +73,7 @@ logmarg   & {NA} & -516.838 & -517.392 & -517.578 & -517.835 & -518.155\\
 % ==================================================================
 \section{Parameter-space convergence}
 \label{app:mcmc_logit}\label{app:mcmc_horseshoe}
+
 % ==================================================================
 We now test the goodness of the MCMC search over the parameter space
 executed by BAS.
@@ -189,11 +190,15 @@ denotes the single disagreement.}
 \label{fig:cmp}
 \end{figure}
 
-$91\%$ of the $22$ predictors get the same signal/noise call from BAS's
-model-space search and from the horseshoe's continuous shrinkage --- two
-structurally different estimation strategies (discrete model averaging
-vs.\ a single shrinkage prior) landing on the same handful of variables.
-The one disagreement, \texttt{Class:\ Business} (PIP $0.993$,
-$\kappa = 0.186$), is a genuine borderline case in both methods (BAS just
-below its $0.5$ cutoff, the horseshoe's credible interval for it crossing
-zero in Section~03) --- not a real contradiction between them.
+91\% of the 22 predictors get the same signal/noise call from BAS's
+model-space search and from the horseshoe's continuous shrinkage --
+two structurally different estimation strategies (discrete model
+averaging vs.\ a single shrinkage prior) landing on the same handful
+of variables. The two disagreements are genuine borderline cases in
+both methods: \texttt{Personal Travel} (PIP 0.439, $\kappa = 0.353$)
+sits just on opposite sides of each method's 0.5 cutoff, and
+\texttt{Food and drink} (PIP $\approx 0.50$, $\kappa = 0.489$) sits
+essentially on the cutoff for both methods and flips across MCMC
+seeds (Table~18) -- not a real contradiction between the two
+approaches, but two variables where the signal is genuinely too weak
+to classify with confidence.

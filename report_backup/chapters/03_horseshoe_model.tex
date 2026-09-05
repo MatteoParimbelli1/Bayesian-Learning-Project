@@ -181,28 +181,31 @@ Among the four mutually correlated ``booking / connectivity'' items identified i
 the exploratory analysis (Section \ref{sec:data_expl}), the prior does not treat
 them symmetrically: \textit{Ease of Online booking} and \textit{Online support}
 are preserved noticeably more than \textit{Online boarding} and
-\textit{Inflight wifi service} -- the latter being the single most shrunk item in
-the whole model. This is exactly the mechanism the horseshoe was chosen for: when
+\textit{Inflight wifi service}, both of which sit among the most heavily shrunk
+items in the model ($\kappa_j = 0.73$ and $0.72$). This is exactly the mechanism the horseshoe was chosen for: when
 several correlated items carry overlapping information, the prior lets two of them
 represent the signal and treats the other two as largely redundant, instead of
 forcing us to pick one by hand.
 
-\paragraph{Business class shrinks once service quality is in the model.}
-In Section \ref{sec:logit}, \textit{Business} class alone carried a large,
-confident odds ratio (about $4$). Here, with all $14$ service ratings included,
-its coefficient shrinks markedly and its credible interval crosses zero. The
-natural reading is \emph{mediation}, not disappearance: Business passengers are
-more satisfied largely \emph{because} they enjoy better seat comfort,
-entertainment and service, so in Section \ref{sec:logit} the \textit{Class}
-dummy was partly standing in for those ratings simply because they were not yet
-in the model.
+\textbf{Business class shrinks once service quality is in the model, but remains one
+of the strongest effects.} In Section~2, \texttt{Business} class alone carried a
+large, confident odds ratio (about 4). Here, with all 14 service ratings included,
+its coefficient drops to approximately 0.9 on the log-odds scale ($\kappa = 0.180$),
+with a 95\% credible interval comfortably above zero (roughly $[0.4, 1.3]$). Together
+with \emph{disloyal Customer} and \emph{Inflight entertainment}, it remains among the
+three least-shrunk, most confidently preserved effects in the entire model -- smaller
+in magnitude than the unconditional estimate of Section~2, but not remotely
+``explained away.'' The natural reading is \emph{mediation, not disappearance}:
+Business passengers are more satisfied largely \emph{because} they enjoy better seat
+comfort, entertainment and service, so in Section~2 the \texttt{Class} dummy was
+partly standing in for those ratings simply because they were not yet in the model.
 
 \paragraph{Personal Travel gets stronger, not weaker.}
 Section \ref{sec:logit} found the type-of-travel effect nearly explained away by
 \textit{Class}. Under the horseshoe, once the service ratings control for the
-\emph{quality} of the trip experience, \textit{Personal Travel} re-emerges as one
-of the strongest and most confidently negative effects in the model, with a
-credible interval lying entirely below zero. The two findings are not
+\emph{quality} of the trip experience, \textit{Personal Travel} re-emerges with a
+sizeable negative coefficient and a credible interval that lies below zero,
+although only just ($[-1.02,\,-0.004]$). The two findings are not
 contradictory: they show that the earlier attenuation was specifically about
 \textit{Class} soaking up part of the travel-type signal, not about travel type
 being unimportant.

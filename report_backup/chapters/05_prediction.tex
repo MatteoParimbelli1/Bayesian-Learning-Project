@@ -12,7 +12,7 @@
 \section{Prediction and validation}
 \label{sec:prediction}
 % ------------------------------------------------------------------
-Everything up to this point has been estimated on the \num{1203}-customer
+Everything up to this point has been estimated on the \num{1213}-customer
 training subsample. This section confronts the model with the \num{128274}
 held-out customers set aside in Section~\ref{sec:problem}, which were never
 used for fitting, standardisation or variable selection. Following the
@@ -230,6 +230,4 @@ without the structural-zero rows strengthened it rather than weakening it, so
 we report it as an open question. Three limitations are worth naming. The
 structural zeros were flagged and tested but not modelled with a zero-inflated
 likelihood; $n \approx 1200$ is modest for twenty-two predictors, which is why
-several effects are borderline; and the encoding and link choices of
-Section~\ref{sec:logit} were settled on training WAIC without out-of-sample
-re-validation.
+several effects are borderline.

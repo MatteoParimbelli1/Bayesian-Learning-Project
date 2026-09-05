@@ -14,28 +14,27 @@ Following the suggestions of the brief, we fit the model on a compact subset of
 covariates, using the transformations motivated in the data-exploration phase
 (Section \ref{sec:data_expl}): \texttt{age}, \texttt{seat\_comfort},
 \texttt{flight\_distance}, \texttt{cabin\_class}, the log-transformed departure
-delay $\log(1+\texttt{dep\_delay})$ and the signed-log mid-flight delay, together
+delay $\log(1+\texttt{dep\_delay})$ and the \texttt{signed-log mid-flight delay}, together
 with the two binary descriptors \texttt{travel\_type} and
-\texttt{customer\_type}. All continuous covariates are standardised
+\texttt{customer\_type}. All continuous covariates are standardized
 (zero mean, unit variance) so that coefficients are expressed per standard deviation and the common prior variance is equally informative for every covariate. For the binary covariates the reference
 level is chosen as the majority group (\textit{Business travel} and
 \textit{Loyal customer}), so that each coefficient measures the effect of the
 minority condition relative to the typical customer.
-
-Let $y_i \in \{0,1\}$ be the satisfaction outcome of customer $i$ (encoded as in
-Section \ref{sec:problem}) and $x_i$ the corresponding row of the standardised
-design matrix. We assume a Bernoulli likelihood with a logit link:
+\newline
+\hfill\newline
+As stated before, we assume a Bernoulli likelihood with a logit link:
 \begin{equation}
     y_i \mid p_i \sim \text{Bernoulli}(p_i),
     \qquad
     \text{logit}(p_i) = \beta_0 + x_i^\top \beta
-        + \beta_{\text{mid}}\,\texttt{midflight\_delay}_i .
+        + \beta_{\text{mid}}\cdot\texttt{midflight\_delay}_i .
     \label{eq:logit_model}
 \end{equation}
 The mid-flight delay is deliberately kept outside the main design matrix and
 given its own coefficient $\beta_{\text{mid}}$, paired with an explicit
 per-row sampling statement $\texttt{midflight\_delay}_i \sim \mathcal{N}(0,1)$.
-This treats the (standardised) mid-flight delay as a stochastic node rather than
+This treats the (standardised) mid-flight delay as a stochastic node in JAGS rather than
 a fixed regressor, which is convenient for handling it as an augmented quantity
 and keeps its contribution cleanly separated from the other effects.
 
@@ -54,17 +53,17 @@ Here the second argument denotes the prior \emph{variance} $\sigma^2 = 100$
 (equivalently a precision $\tau = 1/\sigma^2 = 0.01$ in the JAGS
 parametrisation). On the logit scale a standard deviation of $10$ is very
 diffuse: it places essentially no informative constraint on plausible
-coefficient values while still being proper, so the posterior is driven by the
+coefficient values while still being proper, so the posterior is driven mostly by the
 likelihood, and the resulting estimates remain directly comparable to a
 maximum-likelihood fit. This choice reflects our lack of prior information and
 keeps the baseline model as neutral as possible.
 
-\subsection{Encoding of the cabin class}
+\subsection{Encoding of the flight class}
 Before committing to the model we address a small preliminary question: is it
-preferable to encode \texttt{cabin\_class} as a pair of dummy variables
+preferable to encode \texttt{class} as a pair of dummy variables
 (\textit{Eco Plus} and \textit{Business}, with \textit{Eco} as reference) or as a
 single centred ordinal score ($1/2/3$)? To decide, we fit the model
-\eqref{eq:logit_model} under both encodings and compare them with the Widely
+\eqref{eq:priors} under both encodings and compare them with the Widely
 Applicable Information Criterion (WAIC), computed from the pointwise
 log-likelihood of the MCMC draws.
 
@@ -72,18 +71,23 @@ The dummy encoding attains the lower WAIC ($1373.2$ against $1379.6$ for the
 ordinal one), i.e. a slightly better expected predictive fit. The difference in
 expected log predictive density is $\Delta\text{elpd} = -3.2$ with a standard
 error of $2.7$, so the preference, although real, is smaller than two standard
-errors and therefore modest. Because \texttt{cabin\_class} is genuinely
+errors and therefore modest. Because \texttt{class} is genuinely
 \emph{nominal} rather than an equally-spaced ordinal scale, and because the
 dummy specification is both more flexible and lets us report a separate,
 directly interpretable odds ratio for each class, we adopt the dummy encoding
-for the rest of the analysis.
+for the rest of the analysis. To verify that this in-sample preference is not an artefact of the modest
+training size ($n=1200$), we re-score both encodings on the held-out test
+set ($n\approx128{,}000$ customers), using the posterior-mean predictive
+probability $\hat p_i = S^{-1}\sum_{s=1}^{S}\mathrm{logit}^{-1}\!\left(\hat\beta_0^{(s)} + x_i\hat\beta^{(s)}\right)$
+obtained from the already-fitted MCMC draws (without additional sampling). The dummy encoding again outperforms the ordinal one on all three
+out-of-sample scoring rules considered: log-loss (0.557 against 0.562),
+Brier score (0.187 against 0.190), and AUC (0.786 against 0.781). Since the
+WAIC-based preference is corroborated out-of-sample, we treat the encoding
+choice as settled.
 
 \subsection{MCMC setup and convergence}
-Posterior inference is carried out via MCMC in JAGS. We run $3$ parallel chains,
-with an adaptation phase of $1500$ iterations, a burn-in of $1000$ iterations,
-$3000$ monitored iterations per chain and a thinning factor of $7$ to reduce the
-residual autocorrelation between consecutive draws. Table
-\ref{tab:mcmc_settings} summarises these choices.
+Posterior inference is carried out via MCMC in JAGS. Table
+\ref{tab:mcmc_settings} summarises the choices on the chain parameters.
 
 \begin{table}[htbp]
   \centering
@@ -108,7 +112,7 @@ upper confidence limits up to $1.02$, multivariate PSRF $= 1.01$), the trace
 plots show well-mixed, stationary chains overlapping around a common region, and
 the autocorrelation decays quickly to zero within a few lags after thinning. The
 effective sample sizes range from about $590$ (for the intercept and the
-personal-travel coefficient) to roughly $1350$, which is more than adequate for
+personal-travel coefficient) to roughly $1350$, which is adequate for
 stable posterior summaries. A complete convergence assessment
 (trace plots, autocorrelation functions and the full diagnostic tables) is
 deferred to Appendix \ref{app:mcmc_logit}.
@@ -157,13 +161,11 @@ posterior mean, the $95\%$ credible interval on the log-odds scale
   }
 \end{table}
 
-\subsection{Interpretation}
 Four effects clearly separate from the ``no-effect'' line (OR $=1$). By far the
-largest is the cabin class: travelling in \textit{Business} rather than
+largest is the class: travelling in \textit{Business} rather than
 \textit{Eco} multiplies the odds of being satisfied by roughly $4.3$
-($95\%$ CI $[3.07, 6.08]$), even after adjusting for all the other covariates,
-confirming the marginal contrast already seen in the data-exploration phase.
-\textit{Seat comfort} is the strongest continuous driver
+($95\%$ CI $[3.07, 6.08]$), even after adjusting for all the other covariates.
+\textit{Seat comfort} is the second strongest driver
 (OR $\approx 1.88$ per standard deviation, $[1.63, 2.16]$): more comfortable
 seating is strongly associated with satisfaction. In the opposite direction, a
 \textit{disloyal customer} has markedly lower odds of being satisfied
