@@ -7,8 +7,10 @@ codex/
 .DS_Store
 .Rapp.history
 
-# Knitted output — regenerate by knitting the .Rmd, don't commit
+# Knitted notebook output. The rendered HTML for deliver/ is tracked so the
+# team can read the analysis without running R; everything else is not.
 *.html
+!deliver/*.html
 *_files/
 *.knit.md
 *.utf8.md
