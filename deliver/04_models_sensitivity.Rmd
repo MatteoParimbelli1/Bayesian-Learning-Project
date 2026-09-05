@@ -260,3 +260,28 @@ the ambiguous rows are excluded (`Seat comfort` $\kappa$ drops from
 `r full_tbl$kappa[full_tbl$term=="Seat comfort"]` to
 `r zero_tbl$kappa[zero_tbl$term=="Seat comfort"]`), consistent with
 those zeros adding genuine noise to *those* two items specifically.
+
+```{r}
+## Model comparison: WAIC and PSIS-LOO
+
+s2 <- readRDS("../data/02_logit_mcmc.rds")
+s3 <- readRDS("../data/03_horseshoe_final.rds")
+
+print(s2$loo)
+print(s3$loo)
+
+loo_cmp <- loo_compare(list(logit = s2$loo, horseshoe = s3$loo))
+print(loo_cmp)
+```
+
+```{r}
+loo_tbl <- data.frame(
+  Model = c("Vague-prior logit", "Horseshoe"),
+  elpd_loo = c(s2$loo$estimates["elpd_loo","Estimate"], s3$loo$estimates["elpd_loo","Estimate"]),
+  SE       = c(s2$loo$estimates["elpd_loo","SE"],       s3$loo$estimates["elpd_loo","SE"]),
+  p_loo    = c(s2$loo$estimates["p_loo","Estimate"],    s3$loo$estimates["p_loo","Estimate"]),
+  looic    = c(s2$loo$estimates["looic","Estimate"],    s3$loo$estimates["looic","Estimate"])
+)
+knitr::kable(round(loo_tbl[,-1], 1), row.names = FALSE)
+```
+
