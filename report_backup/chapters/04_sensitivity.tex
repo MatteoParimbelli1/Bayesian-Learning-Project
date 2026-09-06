@@ -116,15 +116,15 @@ predictors whose posterior mean moves most across them.
 
 \begin{figure}[htbp]
   \centering
-  \begin{minipage}[c]{0.46\linewidth}
+  \begin{minipage}[c]{0.4\linewidth}
     \centering
     \includegraphics[width=\linewidth]{img/sensitivity/horseshoe_sweep.png}
     \captionof{figure}{Horseshoe posterior coefficients across three global
       scales, ordered by shrinkage weight at the default scale.}
     \label{fig:hs-beta}
   \end{minipage}
-  \hfill
-  \begin{minipage}[c]{0.50\linewidth}
+  \hspace{4cm}
+  \begin{minipage}[c]{0.36\linewidth}
     \centering
     \small
     \captionof{table}{Largest movement of the posterior mean across the three
@@ -132,7 +132,7 @@ predictors whose posterior mean moves most across them.
     \label{tab:hs-range}
     \begin{tabular}{lc}
       \toprule
-      Term & Range of posterior mean \\
+      Term & Range \\
       \midrule
       Personal Travel                & 0.036 \\
       disloyal Customer              & 0.020 \\
@@ -193,7 +193,7 @@ ambiguous rows.
 
 \begin{figure}[htbp]
   \centering
-  \begin{minipage}[c]{0.57\linewidth}
+  \begin{minipage}[t]{0.50\linewidth}
     \centering
     \footnotesize
     \setlength{\tabcolsep}{3pt}
@@ -229,10 +229,10 @@ ambiguous rows.
       \bottomrule
     \end{tabular}
   \end{minipage}
-  \hfill
-  \begin{minipage}[c]{0.40\linewidth}
+  \hspace{.5cm}
+  \begin{minipage}[t]{0.46\linewidth}
     \centering
-    \includegraphics[width=\linewidth]{img/sensitivity/structural_zero.png}
+    \includegraphics[width=0.7\linewidth]{img/sensitivity/structural_zero.png}
     \captionof{figure}{Coefficients of the correlated seat/catering/ground
       cluster, full data vs.\ excluding structural-zero rows.}
     \label{fig:structzero}
