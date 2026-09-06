@@ -11,7 +11,7 @@ shrinkage model of Section~\ref{sec:regression}.
 Following the suggestions of the brief, we fit the model on a compact subset of
 covariates, using the transformations motivated in the data-exploration phase
 (Section \ref{sec:data_expl}): \texttt{age}, \texttt{seat\_comfort},
-\texttt{flight\_distance}, \texttt{cabin\_class}, the log-transformed departure
+\texttt{flight\_distance}, \texttt{class}, the log-transformed departure
 delay $\log(1+\texttt{dep\_delay})$ and the \texttt{signed-log mid-flight delay}, together
 with the two binary descriptors \texttt{travel\_type} and
 \texttt{customer\_type}. All continuous covariates are standardized
@@ -107,21 +107,31 @@ Posterior inference is carried out via MCMC in JAGS. Table
 \end{table}
 
 \subsection{Posterior results}
-Figures for the posterior densities of the coefficients and the odds-ratio
-forest plot are collected below; the corresponding numerical summaries are
-reported in Table \ref{tab:or_logit}. For each coefficient we report the
+The posterior densities of the coefficients and the odds-ratio forest plot are
+collected in Figure~\ref{fig:logit_post_or}; the corresponding numerical
+summaries are reported in Table \ref{tab:or_logit}. For each coefficient we report the
 posterior mean, the $95\%$ credible interval on the log-odds scale
 ($\beta$) and the same quantities transformed to the odds-ratio scale
 ($\text{OR} = e^{\beta}$), which is the natural scale for interpretation.
 
-% -----------------------------------------------------------------------------
-% Figures intentionally omitted for now (text-only draft).
-% Available knitted plots to insert later:
-%   - Posterior densities, continuous coefficients (mcmc_areas group 1)
-%   - Posterior densities, cabin-class dummies    (mcmc_areas group 2)
-%   - Posterior densities, binary + intercept      (mcmc_areas group 3)
-%   - Odds-ratio forest plot (95% credible intervals, log scale)
-% -----------------------------------------------------------------------------
+\begin{figure}[htbp]
+    \centering
+    \begin{subfigure}[t]{.45\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{img/logit_model/post_1.png}
+        \caption{Posterior densities of the continuous coefficients.}
+        \label{img:logit_post_cont}
+    \end{subfigure}
+    \hspace{1cm}
+    \begin{subfigure}[t]{.45\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{img/logit_model/or-plot-1.png}
+        \caption{Odds-ratio forest plot, $95\%$ credible intervals.}
+        \label{img:logit_forest}
+    \end{subfigure}
+    \caption{Baseline logit model: graphical results.}
+    \label{fig:logit_post_or}
+\end{figure}
 
 \begin{table}[htbp]
   \centering
@@ -168,7 +178,7 @@ weak, uncertain effects.
 
 %The most instructive case is the \texttt{type of travel}. In the exploratory
 %analysis personal-travel customers appeared markedly less satisfied, an almost
-%certain marginal association; here, once cabin class and the other covariates
+%certain marginal association; here, once class and the other covariates
 %are held fixed, the credible interval for \textit{Personal Travel}
 %($0.61$ to $1.18$) comes close to, but no longer excludes, $1$. This is exactly
 %the confounding anticipated in Section \ref{sec:data_expl}: business travellers
