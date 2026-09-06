@@ -4,19 +4,13 @@
 % ------------------------------------------------------------------
 This section stress-tests the conclusions of Section~\ref{sec:logit}
 (vague-prior logit) and Section~\ref{sec:regression} (horseshoe) against the
-modelling choices we made along the way, and closes by using those two fits
-to formally justify which model we carry forward. We ask four robustness
-questions: does the vague model's posterior depend on the prior \emph{variance}
-we picked (Section~4.1)? Does the horseshoe's signal/noise verdict depend on
-the \emph{global scale} of its half-Cauchy prior (Section~4.2)? Does the
-counter-intuitive \texttt{Departure/Arrival time convenient} coefficient from
-Section~\ref{sec:regression} survive dropping the ambiguous structural-zero
-rows (Section~4.3)? And do any of the conclusions depend on the size of the
-training set (Section~4.4)? We close the chapter (Section~4.5) by comparing
-the two fitted models directly via WAIC and PSIS-LOO \cite{bl_book}, which formalises the
-choice of carrying the horseshoe model forward to Section~\ref{sec:prediction}.
+modelling choices we made along the way. Each of the four checks below opens
+with the question it answers. The chapter then closes by comparing the two
+fitted models directly via WAIC and PSIS-LOO \cite{bl_book}, which formalises
+the choice of carrying the horseshoe model forward to
+Section~\ref{sec:prediction}.
 
-The four robustness checks above require heavy JAGS refits, so they are split
+These four robustness checks require heavy JAGS refits, so they are split
 into separate script files (\texttt{04a\_prior\_sweep.R},
 \texttt{04b\_horseshoe\_prior\_sweep.R}, \texttt{04c\_structural\_zero\_refit.R},
 \texttt{04d\_large\_subsample\_refit.R}) to avoid excessively long cells; each
@@ -29,7 +23,8 @@ Sections~\ref{sec:logit} and~\ref{sec:regression}.
 \subsection{Logit model prior sensitivity}
 \label{sec:sens-logit}
 % ==================================================================
-We refit Section~02's model (vague priors, dummy \texttt{Class}
+\emph{Does the vague model's posterior depend on the prior variance we
+picked?} We refit Section~\ref{sec:logit}'s model (vague priors, dummy \texttt{Class}
 encoding) four times, varying only the prior variance on every
 $\beta_j$:
 \[
@@ -96,16 +91,16 @@ sparsity); large $s$ relaxes the global shrinkage. This is the parameter
 whose choice could plausibly change \emph{which} covariates the model
 keeps, so it is the one worth testing.
 
-\texttt{04b\_horseshoe\_prior\_sweep.R} refits the exact Section~03 model
+\texttt{04b\_horseshoe\_prior\_sweep.R} refits the exact Section~\ref{sec:regression} model
 three times, varying only this global scale,
-$s \in \{0.1,\, 1,\, 10\}$ ($s = 1$ is the Section~03 default), while the
+$s \in \{0.1,\, 1,\, 10\}$ ($s = 1$ is the Section~\ref{sec:regression} default), while the
 local scales $\lambda_j$ keep the standard $\mathcal{C}^+(0,1)$. For each
 fit it stores the posterior mean and $95\%$ credible interval of every
 coefficient, and the per-predictor shrinkage weight
 \[
   \kappa_j = \frac{1}{1 + \lambda_j^2}
 \]
-(near $0$ = signal, near $1$ = shrunk, exactly as in Section~03).
+(near $0$ = signal, near $1$ = shrunk, exactly as in Section~\ref{sec:regression}).
 
 % ------------------------------------------------------------------
 \subsubsection{Coefficients across global scales}
@@ -179,9 +174,11 @@ Appendix~\ref{app:hs_shrinkage}.
 \subsection{Structural-zero robustness check}
 \label{sec:sens-structzero}\label{sec:robustness}
 % ==================================================================
-Section~03 speculated that \texttt{Departure/Arrival time convenient}'s
+\emph{Does the counter-intuitive \texttt{Departure/Arrival time convenient}
+coefficient survive dropping the ambiguous structural-zero rows?}
+Section~\ref{sec:regression} speculated that its
 counter-intuitive \emph{negative} coefficient might be an artefact of
-the structural zeros flagged in Section~00 (zeros that plausibly mean
+the structural zeros flagged in Section~\ref{sec:data_expl} (zeros that plausibly mean
 ``not applicable'' rather than genuine dissatisfaction). We test that
 directly by refitting the full horseshoe model with those rows excluded
 (\texttt{04c\_structural\_zero\_refit.R}): $110$ rows are
@@ -245,7 +242,7 @@ not shrink towards zero when the ambiguous rows are removed; it gets
 \emph{more} negative (from $-0.334$ to $-0.506$), while its credible
 interval widens slightly, as expected with $110$ fewer rows. Whatever
 drives this effect, it is not
-simply the structural-zero ambiguity we suspected in Section~03; we
+simply the structural-zero ambiguity we suspected in Section~\ref{sec:regression}; we
 report this as an open, unresolved finding rather than force a tidier
 story onto it. On the other hand, the other two members of that same correlated
 cluster move in \emph{opposite} directions once the ambiguous rows are
@@ -262,6 +259,7 @@ differently.
 \subsection{Sample-size robustness}
 \label{sec:sens-samplesize}
 % ==================================================================
+\emph{Do any of the conclusions depend on the size of the training set?}
 The logit prior-variance sweep (Section~\ref{sec:sens-logit}) and the
 horseshoe global-scale sweep (Section~\ref{sec:sens-horseshoe}) varied
 the prior; the structural-zero refit
@@ -283,9 +281,9 @@ $n = 1213$ analysis rather than a finding about the airline.
 \subsection{Model comparison: WAIC and PSIS-LOO}
 \label{WPSIS}
 
-Alongside the WAIC-based comparison of Section~2.2 (used there to choose the
-\texttt{Class} encoding), we compare the vague-prior logit of Section~2 and
-the horseshoe model of Section~3 via Pareto-smoothed importance sampling
+Alongside the WAIC-based comparison of Section~\ref{sec:class-encoding} (used there to choose the
+\texttt{Class} encoding), we compare the vague-prior logit of Section~\ref{sec:logit} and
+the horseshoe model of Section~\ref{sec:regression} via Pareto-smoothed importance sampling
 leave-one-out cross-validation (PSIS-LOO), computed from the same pointwise
 log-likelihood draws already collected for each fit.
 
@@ -308,9 +306,9 @@ so the PSIS-LOO estimates are reliable without further caveats.}
 The horseshoe attains a substantially higher expected log predictive density
 ($\Delta\text{elpd} = -194.9$, SE $= 17.5$): the difference is more than eleven
 standard errors, a decisive preference by any conventional threshold. This
-agrees with the WAIC comparison of Section~2.2 -- indeed the logit's LOO-IC
+agrees with the WAIC comparison of Section~\ref{sec:class-encoding} -- indeed the logit's LOO-IC
 (1373.4) essentially reproduces its WAIC (1373.2) from Table~2, confirming
 the two approximations agree here -- and justifies carrying the horseshoe
-model forward as the model of record for Section~5.
+model forward as the model of record for Section~\ref{sec:prediction}.
 
 
