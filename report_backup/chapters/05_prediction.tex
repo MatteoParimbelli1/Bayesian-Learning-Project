@@ -88,37 +88,44 @@ Table~\ref{tab:calibration} bins the held-out set into deciles of predicted
 probability against the observed rate.
 
 
-Calibration is good in the upper half: from the seventh decile up, predicted
-and observed agree closely ($0.801$ against $0.821$, $0.896$ against $0.936$).
-In the middle the model is mildly over-confident about dissatisfaction,
-predicting $0.33$ and $0.49$ in deciles four and five where the observed rates
-are $0.26$ and $0.43$, and the lowest two deciles reverse that. So the model
-separates the classes well at the extremes, where most predictions live, and
-is least trustworthy around $\hat{p} \approx 0.3$--$0.6$, where the evidence
-genuinely is ambiguous.
-
 \begin{table}[htbp]
-\centering
-\small
-\caption{Calibration by decile of predicted probability.}
-\label{tab:calibration}
-\setlength{\tabcolsep}{4pt}
-\begin{tabular}{cccc}
-\toprule
-Decile & Mean predicted & Observed rate & $n$ \\
-\midrule
-1  & 0.035 & 0.121 & \num{12828} \\
-2  & 0.100 & 0.126 & \num{12828} \\
-3  & 0.195 & 0.162 & \num{12828} \\
-4  & 0.326 & 0.260 & \num{12828} \\
-5  & 0.488 & 0.431 & \num{12827} \\
-6  & 0.657 & 0.637 & \num{12827} \\
-7  & 0.801 & 0.821 & \num{12827} \\
-8  & 0.896 & 0.936 & \num{12827} \\
-9  & 0.946 & 0.984 & \num{12827} \\
-10 & 0.977 & 0.997 & \num{12827} \\
-\bottomrule
-\end{tabular}
+  \centering
+  \begin{minipage}[t]{0.44\linewidth}
+    \vspace{0pt}   % top-align the tabular with the text beside it
+    \centering
+    \small
+    \setlength{\tabcolsep}{4pt}
+    \captionof{table}{Calibration by decile of predicted probability.}
+    \label{tab:calibration}
+    \begin{tabular}{cccc}
+      \toprule
+      Decile & Mean predicted & Observed rate & $n$ \\
+      \midrule
+      1  & 0.035 & 0.121 & \num{12828} \\
+      2  & 0.100 & 0.126 & \num{12828} \\
+      3  & 0.195 & 0.162 & \num{12828} \\
+      4  & 0.326 & 0.260 & \num{12828} \\
+      5  & 0.488 & 0.431 & \num{12827} \\
+      6  & 0.657 & 0.637 & \num{12827} \\
+      7  & 0.801 & 0.821 & \num{12827} \\
+      8  & 0.896 & 0.936 & \num{12827} \\
+      9  & 0.946 & 0.984 & \num{12827} \\
+      10 & 0.977 & 0.997 & \num{12827} \\
+      \bottomrule
+    \end{tabular}
+  \end{minipage}
+  \hfill
+  \begin{minipage}[t]{0.52\linewidth}
+    \vspace{0pt}
+    Calibration is good in the upper half: from the seventh decile up, predicted
+    and observed agree closely ($0.801$ against $0.821$, $0.896$ against $0.936$).
+    In the middle the model is mildly over-confident about dissatisfaction,
+    predicting $0.33$ and $0.49$ in deciles four and five where the observed rates
+    are $0.26$ and $0.43$, and the lowest two deciles reverse that. So the model
+    separates the classes well at the extremes, where most predictions live, and
+    is least trustworthy around $\hat{p} \approx 0.3$--$0.6$, where the evidence
+    genuinely is ambiguous.
+  \end{minipage}
 \end{table}
 
 \subsection{Posterior predictive check by subgroup}
