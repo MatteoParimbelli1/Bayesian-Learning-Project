@@ -74,46 +74,58 @@ $$
 r_{X,Y} = \frac{\sum (x_i - \bar{x})(y_i - \bar{y})}
                {\sqrt{\sum (x_i - \bar{x})^2 \sum (y_i - \bar{y})^2}}
 $$
+Tab.~\ref{tab:class_balance} reports the class balance of the remaining categorical variables. Given the class imbalance of some covariates, we decided to stratify the train--test split of the dataset.
+
 \begin{figure}[htbp]
+  \centering
+  % ---- left: the two heatmaps ----
+  \begin{minipage}[c]{0.64\textwidth}
     \centering
-    \begin{subfigure}[t]{.48\textwidth}
-        \centering
-        \includegraphics[width=\linewidth]{img/data_expl/full_corr.png}
-        \caption{Correlation among all variables, both original and augmented}
-        \label{img:full_corr}
+    \begin{subfigure}[b]{0.49\linewidth}
+      \centering
+      \includegraphics[width=\linewidth]{img/data_expl/full_corr.png}
+      \caption{Correlation among all variables, both original and augmented}
+      \label{img:full_corr}
     \end{subfigure}
     \hfill
-    \begin{subfigure}[t]{.48\textwidth}
-        \centering
-        \includegraphics[width=\linewidth]{img/data_expl/qs_corr.png}
-        \caption{Correlation among service-quality items}
-        \label{img:qs_corr}
+    \begin{subfigure}[b]{0.49\linewidth}
+      \centering
+      \includegraphics[width=\linewidth]{img/data_expl/qs_corr.png}
+      \caption{Correlation among service-quality items}
+      \label{img:qs_corr}
     \end{subfigure}
-    \caption{Covariance matrix between covariates}
+  \end{minipage}
+  \hfill
+  % ---- right: the class-balance table, alongside rather than below ----
+  \begin{minipage}[c]{0.33\textwidth}
+    \centering
+    \footnotesize
+    \setlength{\tabcolsep}{4pt}
+    \renewcommand{\arraystretch}{0.9}
+    \captionof{table}{Class balance of the categorical covariates}
+    \label{tab:class_balance}
+    % \captionof{table} inside a figure float steps the figure counter as well,
+    % which would number this float 2 while its own subfigures read 1a/1b.
+    \addtocounter{figure}{-1}
+    \begin{tabular}{llr}
+      \toprule
+      Variable & Level & Prop. \\
+      \midrule
+      Satisfaction  & Dissatisfied      & 0.453 \\
+                    & Satisfied         & 0.547 \\
+      \addlinespace
+      Customer type & Disloyal customer & 0.183 \\
+                    & Loyal customer    & 0.817 \\
+      \addlinespace
+      Travel type   & Business travel   & 0.691 \\
+                    & Personal travel   & 0.309 \\
+      \addlinespace
+      Class         & Eco               & 0.449 \\
+                    & Eco Plus          & 0.072 \\
+                    & Business          & 0.479 \\
+      \bottomrule
+    \end{tabular}
+  \end{minipage}
+  \caption{Correlation structure and class balance of the covariates}
+  \label{fig:data_expl_overview}
 \end{figure}
-
-Tab.~\ref{tab:class_balance} reports the class balance of the remaining categorical variables. Given the class imbalance of some covariates, we decided to stratify the train--test split of the dataset.
-\begin{table}[htbp] 
-\small
-  \centering
-  \caption{Class balance of the categorical covariates}
-  \label{tab:class_balance}
-  \begin{tabular}{llr}
-    \toprule
-    Variable & Level & Proportion \\
-    \midrule
-    Satisfaction  & Dissatisfied      & 0.453 \\
-                  & Satisfied         & 0.547 \\
-    \addlinespace
-    Customer type & Disloyal customer & 0.183 \\
-                  & Loyal customer    & 0.817 \\
-    \addlinespace
-    Travel type   & Business travel   & 0.691 \\
-                  & Personal travel   & 0.309 \\
-    \addlinespace
-    Class   & Eco               & 0.449 \\
-                  & Eco Plus          & 0.072 \\
-                  & Business          & 0.479 \\
-    \bottomrule
-  \end{tabular}
-\end{table}

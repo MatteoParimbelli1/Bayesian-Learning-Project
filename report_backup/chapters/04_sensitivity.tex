@@ -39,40 +39,43 @@ The fits are produced by \texttt{04a\_prior\_sweep.R}. Figure~\ref{fig:prior-swe
 overlays the posterior mean and $95\%$ credible interval of each
 coefficient across the four prior variances.
 
-\begin{figure}[htbp]
-\centering
-\includegraphics[width=0.9\linewidth]{img/sensitivity/prior_sweep.png}
-\caption{Posterior coefficients of the vague-prior logit model across
-four prior variances.}
-\label{fig:prior-sweep}
-\end{figure}
-
 Table~\ref{tab:prior-range} reports, for each coefficient, the range
 (max $-$ min) of its posterior mean across the four prior variances.
 
-\begin{table}[htbp]
-\small
-\centering
-\caption{Range of posterior means across the four prior variances
-(rows are ordered by decreasing range in the notebook).}
-\label{tab:prior-range}
-\begin{tabular}{lc}
-\toprule
-Term & Range of posterior mean \\
-\midrule
-Intercept                      & 0.010 \\
-Age                            & 0.009 \\
-Seat comfort                   & 0.008 \\
-Flight Distance                & 0.006 \\
-Class: Eco Plus                & 0.012 \\
-Class: Business                & 0.038 \\
-log(1+Departure Delay)         & 0.005 \\
-Personal Travel                & 0.008 \\
-disloyal Customer              & 0.066 \\
-Mid-flight delay (signed-log)  & 0.004 \\
-\bottomrule
-\end{tabular}
-\end{table}
+\begin{figure}[htbp]
+  \centering
+  \begin{minipage}[c]{0.55\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{img/sensitivity/prior_sweep.png}
+    \captionof{figure}{Posterior coefficients of the vague-prior logit model
+      across four prior variances.}
+    \label{fig:prior-sweep}
+  \end{minipage}
+  \hfill
+  \begin{minipage}[c]{0.42\linewidth}
+    \centering
+    \small
+    \captionof{table}{Range of posterior means across the four prior variances
+      (rows are ordered by decreasing range in the notebook).}
+    \label{tab:prior-range}
+    \begin{tabular}{lc}
+      \toprule
+      Term & Range \\
+      \midrule
+      Intercept                     & 0.010 \\
+      Age                           & 0.009 \\
+      Seat comfort                  & 0.008 \\
+      Flight Distance               & 0.006 \\
+      Class: Eco Plus               & 0.012 \\
+      Class: Business               & 0.038 \\
+      log(1+Departure Delay)        & 0.005 \\
+      Personal Travel               & 0.008 \\
+      disloyal Customer             & 0.066 \\
+      Mid-flight delay (signed-log) & 0.004 \\
+      \bottomrule
+    \end{tabular}
+  \end{minipage}
+\end{figure}
 
 The largest movement across four orders of magnitude of prior variance
 is only $0.066$ on the log-odds scale, for a coefficient whose

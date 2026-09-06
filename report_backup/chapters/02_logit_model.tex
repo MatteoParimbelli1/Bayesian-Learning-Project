@@ -75,35 +75,42 @@ Posterior inference is carried out via MCMC in JAGS. Table
 \ref{tab:mcmc_settings} summarises the choices on the chain parameters.
 
 \begin{table}[htbp]
-\small
   \centering
-  \caption{MCMC settings used for the logit model}
-  \label{tab:mcmc_settings}
-  \begin{tabular}{lr}
-    \toprule
-    Setting & Value \\
-    \midrule
-    Chains            & 3 \\
-    Adaptation        & 1500 \\
-    Burn-in           & 1000 \\
-    Iterations        & 12000 \\
-    Thinning          & 7 \\
-    Retained draws    & 5142 \\
-    \bottomrule
-  \end{tabular}
+  \begin{minipage}[t]{0.34\textwidth}
+    \vspace{0pt}   % align the two minipage tops
+    \small
+    \centering
+    \begin{tabular}{lr}
+      \toprule
+      Setting & Value \\
+      \midrule
+      Chains            & 3 \\
+      Adaptation        & 1500 \\
+      Burn-in           & 1000 \\
+      Iterations        & 12000 \\
+      Thinning          & 7 \\
+      Retained draws    & 5142 \\
+      \bottomrule
+    \end{tabular}
+    \caption{MCMC settings used for the logit model}
+    \label{tab:mcmc_settings}
+  \end{minipage}
+  \hfill
+  \begin{minipage}[t]{0.62\textwidth}
+    \vspace{0pt}
+    Convergence was satisfactory for all parameters. The Gelman--Rubin \cite{bl_book} potential
+    scale reduction factors are essentially $1$ (point estimates $1$,
+    upper confidence limits capped at 1.01, multivariate PSRF $= 1$), the trace
+    plots show well-mixed, stationary chains, and
+    the autocorrelation decays quickly to zero within a few,small lags . The
+    effective sample sizes are at or near the number of retained draws for most
+    parameters, with the lowest at $2057$: the Monte Carlo standard error is
+    therefore at most $2.2\%$ of the posterior standard deviation, so the summaries
+    we report are stable to the precision at which we quote them. The complete convergence assessment
+    (trace plots, autocorrelation functions and the full diagnostic tables) is
+    deferred to Appendix \ref{app:logit_convergence}.
+  \end{minipage}
 \end{table}
-
-Convergence was satisfactory for all parameters. The Gelman--Rubin \cite{bl_book} potential
-scale reduction factors are essentially $1$ (point estimates $1$,
-upper confidence limits capped at 1.01, multivariate PSRF $= 1$), the trace
-plots show well-mixed, stationary chains, and
-the autocorrelation decays quickly to zero within a few,small lags . The
-effective sample sizes are at or near the number of retained draws for most
-parameters, with the lowest at $2057$: the Monte Carlo standard error is
-therefore at most $2.2\%$ of the posterior standard deviation, so the summaries
-we report are stable to the precision at which we quote them. The complete convergence assessment
-(trace plots, autocorrelation functions and the full diagnostic tables) is
-deferred to Appendix \ref{app:logit_convergence}.
 
 \subsection{Posterior results}
 Figures for the posterior densities of the coefficients and the odds-ratio
