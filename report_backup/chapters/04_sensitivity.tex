@@ -10,15 +10,6 @@ fitted models directly via WAIC and PSIS-LOO \cite{bl_book}, which formalises
 the choice of carrying the horseshoe model forward to
 Section~\ref{sec:prediction}.
 
-These four robustness checks require heavy JAGS refits, so they are split
-into separate script files (\texttt{04a\_prior\_sweep.R},
-\texttt{04b\_horseshoe\_prior\_sweep.R}, \texttt{04c\_structural\_zero\_refit.R},
-\texttt{04d\_large\_subsample\_refit.R}) to avoid excessively long cells; each
-script is meant to be executed once and its stored output re-used. The final
-model-comparison step, by contrast, requires no new sampling: it simply
-reuses the pointwise log-likelihood draws already saved by
-Sections~\ref{sec:logit} and~\ref{sec:regression}.
-
 % ==================================================================
 \subsection{Logit model prior sensitivity}
 \label{sec:sens-logit}
@@ -30,7 +21,7 @@ $\beta_j$:
 \[
   \sigma^2_\beta \in \{1,\, 10,\, 100,\, 10000\}.
 \]
-The fits are produced by \texttt{04a\_prior\_sweep.R}. Figure~\ref{fig:prior-sweep}
+Figure~\ref{fig:prior-sweep}
 overlays the posterior mean and $95\%$ credible interval of each
 coefficient across the four prior variances.
 
@@ -91,7 +82,7 @@ sparsity); large $s$ relaxes the global shrinkage. This is the parameter
 whose choice could plausibly change \emph{which} covariates the model
 keeps, so it is the one worth testing.
 
-\texttt{04b\_horseshoe\_prior\_sweep.R} refits the exact Section~\ref{sec:regression} model
+We refit the Section~\ref{sec:regression} model
 three times, varying only this global scale,
 $s \in \{0.1,\, 1,\, 10\}$ ($s = 1$ is the Section~\ref{sec:regression} default), while the
 local scales $\lambda_j$ keep the standard $\mathcal{C}^+(0,1)$. For each
@@ -111,15 +102,15 @@ predictors whose posterior mean moves most across them.
 
 \begin{figure}[htbp]
   \centering
-  \begin{minipage}[c]{0.4\linewidth}
+  \begin{minipage}[c]{0.46\linewidth}
     \centering
     \includegraphics[width=\linewidth]{img/sensitivity/horseshoe_sweep.png}
     \captionof{figure}{Horseshoe posterior coefficients across three global
       scales, ordered by shrinkage weight at the default scale.}
     \label{fig:hs-beta}
   \end{minipage}
-  \hspace{4cm}
-  \begin{minipage}[c]{0.36\linewidth}
+  \hfill
+  \begin{minipage}[c]{0.50\linewidth}
     \centering
     \small
     \captionof{table}{Largest movement of the posterior mean across the three
@@ -181,7 +172,7 @@ counter-intuitive \emph{negative} coefficient might be an artefact of
 the structural zeros flagged in Section~\ref{sec:data_expl} (zeros that plausibly mean
 ``not applicable'' rather than genuine dissatisfaction). We test that
 directly by refitting the full horseshoe model with those rows excluded
-(\texttt{04c\_structural\_zero\_refit.R}): $110$ rows are
+: $110$ rows are
 dropped, leaving $1103$.
 
 Table~\ref{tab:structzero} reports the refit, and Figure~\ref{fig:structzero}
@@ -191,11 +182,15 @@ ambiguous rows.
 \begin{figure}[htbp]
   \centering
   \begin{minipage}[t]{0.50\linewidth}
+    \vspace{0pt}   % [t] aligns first baselines, not top edges
     \centering
     \footnotesize
     \setlength{\tabcolsep}{3pt}
     \renewcommand{\arraystretch}{0.9}
-    \captionof{table}{Horseshoe refit excluding structural-zero rows.}
+    \captionof{table}{Horseshoe refit excluding structural-zero rows: the ten
+      predictors the horseshoe keeps as signal ($\kappa_j < 0.5$), plus
+      \texttt{Food and drink}, discussed below. The other eleven move by less
+      and are omitted.}
     \label{tab:structzero}
     \begin{tabular}{lcccc}
       \toprule
@@ -211,23 +206,14 @@ ambiguous rows.
       Ease of Online booking         & $+0.498$ & $+0.081$ & $+0.872$ & 0.369 \\
       Checkin service                & $+0.376$ & $+0.156$ & $+0.592$ & 0.429 \\
       Leg room service               & $+0.294$ & $+0.050$ & $+0.524$ & 0.492 \\
-      Online support                 & $+0.247$ & $-0.019$ & $+0.561$ & 0.553 \\
-      Cleanliness                    & $+0.159$ & $-0.059$ & $+0.428$ & 0.610 \\
-      Gate location                  & $-0.171$ & $-0.448$ & $+0.048$ & 0.620 \\
-      Baggage handling               & $+0.132$ & $-0.059$ & $+0.396$ & 0.666 \\
-      Class: Eco Plus                & $+0.010$ & $-0.466$ & $+0.492$ & 0.674 \\
-      Inflight wifi service          & $-0.108$ & $-0.399$ & $+0.099$ & 0.681 \\
-      log(1+Departure Delay)         & $-0.087$ & $-0.291$ & $+0.064$ & 0.719 \\
+      \midrule
       Food and drink                 & $+0.025$ & $-0.215$ & $+0.299$ & 0.732 \\
-      Online boarding                & $+0.030$ & $-0.194$ & $+0.296$ & 0.732 \\
-      Age                            & $-0.032$ & $-0.209$ & $+0.116$ & 0.747 \\
-      Flight Distance                & $-0.016$ & $-0.191$ & $+0.142$ & 0.772 \\
-      Mid-flight delay (signed log)  & $-0.014$ & $-0.189$ & $+0.153$ & 0.780 \\
       \bottomrule
     \end{tabular}
   \end{minipage}
   \hspace{.5cm}
   \begin{minipage}[t]{0.46\linewidth}
+    \vspace{0pt}
     \centering
     \includegraphics[width=0.7\linewidth]{img/sensitivity/structural_zero.png}
     \captionof{figure}{Coefficients of the correlated seat/catering/ground
@@ -260,16 +246,10 @@ differently.
 \label{sec:sens-samplesize}
 % ==================================================================
 \emph{Do any of the conclusions depend on the size of the training set?}
-The logit prior-variance sweep (Section~\ref{sec:sens-logit}) and the
-horseshoe global-scale sweep (Section~\ref{sec:sens-horseshoe}) varied
-the prior; the structural-zero refit
-(Section~\ref{sec:sens-structzero}) varied which rows enter the fit.
-This one varies how many. Every model in this report is estimated on
-\num{1213} records,
-about $1\%$ of the cleaned dataset, a choice forced by MCMC cost.
-\texttt{04d\_large\_subsample\_refit.R} refits the model of
-Section~\ref{sec:logit} on a stratified
-subsample of \num{15003} records. This leaves the coefficients we rely on
+The previous three checks varied the prior and which rows enter the fit; this
+one varies how many. We refit the model of Section~\ref{sec:logit} on a
+stratified subsample of \num{15003} records, twelve times the \num{1213} used
+throughout. This leaves the coefficients we rely on
 unmoved (\texttt{Class: Business} by $0.005$, \texttt{disloyal
 Customer} by $0.004$, \texttt{Seat comfort} by $0.023$) and contracts
 the intervals by a median factor of $3.54$, in line with the $3.52$ that
