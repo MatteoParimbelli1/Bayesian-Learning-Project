@@ -249,12 +249,15 @@ They were flagged and tested by refitting without them, but not modelled: a
 zero-inflated likelihood would treat the two kinds of zero as what they are,
 and would not require discarding \num{110} rows to ask the question.
 
-\paragraph{Training-set size.} At $n \approx 1200$ the data are modest for
-twenty-two predictors, which is why several effects sit close to the decision
-boundary. The refit on a subsample twelve times larger moves the coefficients
-we report by at most $0.023$, so the conclusions are not fragile; but the two
-predictors whose signal/noise verdict changes with the global scale would
-likely be settled by more data rather than by a better prior.
+\paragraph{Training-set size.} The sample size is prescribed rather than
+chosen: the project description supplies a subset of \num{1000} customers, and
+we fit on \num{1213}. It is nonetheless modest for twenty-two predictors, which
+is why several effects sit close to the decision boundary, and why the two
+predictors whose signal/noise verdict changes with the global scale would be
+settled by more data rather than by a better prior. What the size does not do
+is distort the estimates: refitting on a subsample twelve times larger moves
+the coefficients we report by at most $0.023$
+(Section~\ref{sec:sens-samplesize}).
 
 \paragraph{Three local scales did not converge.} Three of the horseshoe's
 $\lambda_j$ did not reach the conventional $1.1$ threshold
