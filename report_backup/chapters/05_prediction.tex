@@ -215,6 +215,7 @@ first on the reduced covariate set suggested by the brief and then on the full
 set under a horseshoe shrinkage prior, with \texttt{BAS} model averaging as an
 independent cross-check. All posteriors were sampled by MCMC in JAGS.
 
+\subsection{Findings}
 Three effects dominate and survive every specification. Customer loyalty is the
 strongest by a wide margin and the least shrunk coefficient at every global
 scale tested; \emph{Inflight entertainment} and \emph{Business} class follow,
@@ -225,27 +226,43 @@ the same booking cluster. That asymmetry is what the horseshoe was chosen for.
 
 These conclusions are not artefacts of our modelling choices. The vague-prior
 posterior moves by at most $0.066$ across four orders of magnitude of prior
-variance; one predictor of twenty-two changes its signal/noise verdict across a
-hundred-fold range of the global scale, and it sits on the $\kappa = 0.5$
-boundary; and a training set twelve times larger moves the coefficients we
-report by at most $0.022$. Out of sample, on \num{128274} unseen customers, the
-model reaches an AUC of $0.900$, classifies $82.8\%$ correctly, and reproduces
-the observed satisfaction rate in every subgroup.
+variance; two predictors of twenty-two change their signal/noise verdict across
+a hundred-fold range of the global scale, and both sit within $0.02$ of the
+$\kappa = 0.5$ boundary; and a training set twelve times larger moves the
+coefficients we report by at most $0.023$. Out of sample, on \num{128274}
+unseen customers, the model reaches an AUC of $0.900$, classifies $82.8\%$
+correctly, and reproduces the observed satisfaction rate in every subgroup.
 
-One result resisted explanation: \emph{Departure/Arrival time convenient}
-carries a negative coefficient whose interval excludes zero, and refitting
-without the structural-zero rows strengthened it rather than weakening it, so
-we report it as an open question. Three limitations are worth naming. The
-structural zeros were flagged and tested but not modelled with a zero-inflated
-likelihood; $n \approx 1200$ is modest for twenty-two predictors, which is why
-several effects are borderline; and three of the horseshoe's local scales did
-not reach the conventional convergence threshold
-(Appendix~\ref{app:horseshoe_convergence}). Tripling the chain length left them
-unchanged, so this is weak identification rather than insufficient sampling:
-for a covariate the data barely constrains, the amount of shrinkage applied to
-it is itself barely constrained. The coefficients those scales act on did
-converge, and the sensitivity analysis of
-Section~\ref{sec:sens-horseshoe} shows the signal/noise verdicts survive a
-hundred-fold change in the global scale, so the conclusions above stand; but
-the precise shrinkage weight of three weak covariates should not be read to
-three decimals.
+\subsection{Open questions and limitations}
+
+\paragraph{The \texttt{Departure/Arrival time convenient} coefficient.}
+It is negative, its interval excludes zero, and it stayed negative when we
+refit without the structural-zero rows, which is the direction the ambiguity
+would have had to run to explain it. Dropping those rows strengthened the
+effect rather than weakening it, from $-0.334$ to $-0.506$. We report it as an
+open question rather than a finding: the check we designed to explain it away
+did the opposite, and nothing else in the analysis accounts for it.
+
+\paragraph{The structural zeros.} Several service-quality items contain zeros
+that plausibly mean ``not applicable'' rather than genuine dissatisfaction.
+They were flagged and tested by refitting without them, but not modelled: a
+zero-inflated likelihood would treat the two kinds of zero as what they are,
+and would not require discarding \num{110} rows to ask the question.
+
+\paragraph{Training-set size.} At $n \approx 1200$ the data are modest for
+twenty-two predictors, which is why several effects sit close to the decision
+boundary. The refit on a subsample twelve times larger moves the coefficients
+we report by at most $0.023$, so the conclusions are not fragile; but the two
+predictors whose signal/noise verdict changes with the global scale would
+likely be settled by more data rather than by a better prior.
+
+\paragraph{Three local scales did not converge.} Three of the horseshoe's
+$\lambda_j$ did not reach the conventional $1.1$ threshold
+(Appendix~\ref{app:horseshoe_convergence}), the worst at $1.21$. Tripling the
+chain length left them unchanged, so this is weak identification rather than
+insufficient sampling: for a covariate the data barely constrains, the amount
+of shrinkage applied to it is itself barely constrained. The coefficients those
+scales act on did converge, and Section~\ref{sec:sens-horseshoe} shows the
+signal/noise verdicts survive a hundred-fold change in the global scale, so the
+findings above stand. The precise shrinkage weight of three weak covariates,
+though, should not be read to three decimals.
