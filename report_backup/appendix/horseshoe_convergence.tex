@@ -325,6 +325,32 @@ in Section~\ref{sec:sens-horseshoe}.
   \label{fig:hs_shrinkage}
 \end{figure}
 
+\noindent
+Figure~\ref{fig:hs_posterior} in Section~\ref{sec:regression} shows the first
+group of marginal posterior densities. The remaining three follow.
+
+\begin{figure}[htbp]
+  \centering
+  \begin{subfigure}[t]{0.48\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{img/horseshoe_model/post2.png}
+    \caption{Group 2.}
+  \end{subfigure}\hfill
+  \begin{subfigure}[t]{0.48\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{img/horseshoe_model/post3.png}
+    \caption{Group 3.}
+  \end{subfigure}\hfill
+  \begin{subfigure}[t]{0.48\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{img/horseshoe_model/post4.png}
+    \caption{Group 4.}
+  \end{subfigure}\hfill
+  \caption{Marginal posterior densities for the remaining regression
+           coefficients $\beta_j$ under the horseshoe prior.}
+  \label{fig:hs_posterior_rest}
+\end{figure}
+
 \begin{figure}[htbp]
   \centering
   \includegraphics[width=0.62\linewidth]{img/horseshoe_model/beta_forest.png}
