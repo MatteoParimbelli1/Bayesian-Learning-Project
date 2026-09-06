@@ -9,7 +9,7 @@ $$
 \text{logit}(p_i)=\ln\left(\cfrac{p_i}{1-p_i}\right) = \beta_0+x_i\beta + \beta_{\text{mid}}\cdot\texttt{midflight\_delay}_i .
     \label{eq:logit_model}
 $$
-where $\beta_0$ is the intercept in the logit space and $\beta$ is the vector of regression coefficients of the remaining original covariates $X$ (after skeweness adjustment, eventual hot-encoding for categorical variables and data augmentation), $x_i$ is the covariates set of customer $i$.
+where $\beta_0$ is the intercept in the logit space and $\beta$ is the vector of regression coefficients of the remaining original covariates $X$ (after skewness adjustment, eventual hot-encoding for categorical variables and data augmentation), $x_i$ is the covariates set of customer $i$.
 The mid-flight delay is deliberately kept outside the main design matrix and
 given its own coefficient $\beta_{\text{mid}}$, paired with an explicit
 per-row sampling statement $\texttt{midflight\_delay}_i \sim \mathcal{N}(0,1)$ in the JAGS model.

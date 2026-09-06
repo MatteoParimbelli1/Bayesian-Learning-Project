@@ -19,6 +19,8 @@ library(dplyr)
 library(tidyr)
 library(ggplot2)
 library(here)
+# loo_compare() is used by the model-comparison chunk below
+library(loo)
 
 rm(list = ls())
 ```

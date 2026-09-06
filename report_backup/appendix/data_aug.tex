@@ -12,17 +12,18 @@ The second model is more general and, in fact, encompasses the first one; howeve
 
 The regression model that reproduces the plain difference is the one with slope equal to 1 and intercept equal to 0. Fitting the regression model on the full dataset yields an intercept of 0.76 and a slope of 0.97; we therefore decided to opt for the simple difference between the arrival and departure delays.
 
-\subsection{Reducing covariates skeweness}
+\subsection{Reducing covariates skewness}
 From the boxplots in Fig.\ref{fig:boxplot_skew} we can see how covariates \texttt{Flight Distance}, \texttt{Departure Delay} and \texttt{Mid-flight delay} are extremelly right-skewed. Since covariate skewnes might slow down MCMC convergence and are prone to present outliers and leverage points, we decided to transform them and check whether the transformation is beneficial.
 \begin{figure}[h]
     \centering
-    \includegraphics[width=0.5\linewidth]{img//data_expl/boxplot_skew.png}
-    \caption{Boxplots of skewed covriates.}
+    \includegraphics[width=0.5\linewidth]{img/data_expl/boxplot_skew.png}
+    \caption{Boxplots of skewed covariates.}
     \label{fig:boxplot_skew}
 \end{figure}
 
 Since both \texttt{Flight distance} and \texttt{Departure delay} are non-negative we transform them using $ln(1+x)$; instead for \texttt{Mid-flight delay} we use the \textit{signed-log transformation} $\text{sign}(x)    \cdot ln(1+|x|)$ due the presence of negative values.
 \begin{table}[ht]
+\small
 \centering
 \begin{tabular}{lr}
 \hline
@@ -40,5 +41,5 @@ signed-log(Midflight delay) & 0.234 \\
 \label{tab:skewness}
 \end{table}
 
-As we can see in Tab.\ref{tab:skewness} \texttt{Flight distance} is only midly skewed and the transformation actually turn to be worse than the original varibale, therefore we kept it unchanged. Instead for what concerns \texttt{Departure delay} and \texttt{Mid-flight delay} we see higher level of skeweness and the transformation improves this aspect; therefore we decided to kee the log-transformed variables.
+As we can see in Tab.~\ref{tab:skewness} \texttt{Flight distance} is only midly skewed and the transformation actually turn to be worse than the original varibale, therefore we kept it unchanged. Instead for what concerns \texttt{Departure delay} and \texttt{Mid-flight delay} we see higher level of skewness and the transformation improves this aspect; therefore we decided to kee the log-transformed variables.
 

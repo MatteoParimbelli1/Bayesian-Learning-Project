@@ -39,8 +39,12 @@ raw <- raw %>%
     satisfaction   = factor(satisfaction, levels = c("dissatisfied", "satisfied")),
     # even if for this variables their factor won't be relevant during prediction,  is still useful for data exploration
     Class          = factor(Class, levels = c("Eco", "Eco Plus", "Business")),
-    Customer.Type  = factor(Customer.Type),
-    Type.of.Travel = factor(Type.of.Travel)
+    # levels are pinned explicitly: these two feed `strata` below, and
+    # createDataPartition walks the strata in level order, so an implicit
+    # factor() would make the train/test split depend on locale collation.
+    # This order is the one that produced the committed split.
+    Customer.Type  = factor(Customer.Type,  levels = c("disloyal Customer", "Loyal Customer")),
+    Type.of.Travel = factor(Type.of.Travel, levels = c("Business travel", "Personal Travel"))
   )
 
 ```

@@ -90,7 +90,7 @@ model_string = 'model {
 n_chains  = 3
 n_adapt   = 1500
 burn_in   = 1000
-iter      = 3000
+iter      = 12000
 thinning  = 7
 
 fit_model <- function(model_string, X, arr_delay,
@@ -126,7 +126,7 @@ fit_model <- function(model_string, X, arr_delay,
 
 Before actually evaluating the model, we focus on a small question: is it better to encode the `class` as dummy variable or as ordered one?
 
-```{r fit-encoding, cache=TRUE}
+```{r fit-encoding, cache=TRUE, cache.extra=list(n_chains, n_adapt, burn_in, iter, thinning)}
 set.seed(123)
 
 fit_dummy_logit   <- fit_model(model_string, X_dummy,   logmid_delay)
@@ -147,7 +147,7 @@ The dummy encoding has the lower WAIC (`r sprintf("%.1f", w_dummy$estimates["wai
 
 ### 1.2 Out-of-sample re-validation of the encoding choice
 
-The comparison above is an *in-sample* criterion computed on the same n = 1200 rows used to fit both models. Before treating it as final, we score both fits on the held-out test set using the posterior draws we already have -- no new MCMC required, just posterior-mean predicted probabilities against the outcome the models never saw.
+The comparison above is an *in-sample* criterion computed on the same n = 1213 rows used to fit both models. Before treating it as final, we score both fits on the held-out test set using the posterior draws we already have -- no new MCMC required, just posterior-mean predicted probabilities against the outcome the models never saw.
 
 ```{r encoding-oos-validate, cache=TRUE}
 # Held-out test set, same preprocessing pipeline as the training file --
@@ -297,7 +297,7 @@ term_labels <- c(
   "beta[6]" = "log(1+Departure Delay)",
   "beta[7]" = "Personal Travel (vs Business travel)",
   "beta[8]" = "disloyal Customer (vs Loyal)",
-  "beta_arr" = "Arrival delay residual (signed-log)"
+  "beta_arr" = "Mid-flight delay (signed-log)"
 )
 
 post_mean <- colMeans(sm_beta)

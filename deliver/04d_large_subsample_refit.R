@@ -19,9 +19,9 @@ full$y <- as.integer(full$satisfaction == "satisfied")
 
 # Draw a larger, still-tractable stratified subsample (~15,000 rows) as a
 # stand-in for "the full 129,880 rows": a genuine full-data JAGS refit is not
-# feasible on this single-core sandbox (cost scales ~linearly with n, and the
-# n=1203 fit already takes ~100s -- 129,880 rows would take on the order of
-# hours). This is disclosed explicitly in the write-up.
+# feasible here (cost scales ~linearly with n, and the n=1213 fit already takes
+# minutes -- 129,880 rows would take hours). This is disclosed explicitly in the
+# write-up.
 strata <- interaction(full$satisfaction, full$class, drop = TRUE)
 idx_large <- createDataPartition(y = strata, p = 15000 / nrow(full), list = FALSE)
 large <- full[idx_large, ]
@@ -34,7 +34,7 @@ Seat_std        <- std(large$seat_comfort)
 FlightDist_std  <- std(large$flight_distance)
 logDepDelay_std <- std(logDepDelay)
 
-# Same delay term as the n=1200 reference fit in 02_logit_model.Rmd, i.e.
+# Same delay term as the n=1213 reference fit in 02_logit_model.Rmd, i.e.
 # log_mid_delay. This script previously used ArrivalDelay.Residual, which is
 # the alternative the appendix rejects; with it, the two fits would differ in
 # their covariates as well as in n, and the comparison would say nothing about

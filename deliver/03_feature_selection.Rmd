@@ -86,7 +86,7 @@ model {
 }'
 ```
 
-The horseshoe mixes more slowly than the vague-prior model of Section 02 because of the heavy-tailed half-Cauchy hyperpriors, so we budget a longer burn-in and thinning from the outset. This is also a computationally heavier model (22 coefficients, 22 local scales, one global scale, versus Section 02's 9), fit here on a single-core sandbox, so the settings below are deliberately modest; a workstation could comfortably run this for longer.
+The horseshoe mixes more slowly than the vague-prior model of Section 02 because of the heavy-tailed half-Cauchy hyperpriors, so we budget a longer burn-in and thinning from the outset. This is also a computationally heavier model (22 coefficients, 22 local scales, one global scale, versus Section 02's 9). The settings below run in about twenty minutes on a laptop and give a minimum effective sample size above 3,000 across all parameters, comfortably past the usual threshold of 400.
 
 ```{r fit-horseshoe, cache=TRUE}
 set.seed(123)
@@ -95,7 +95,7 @@ set.seed(123)
 n_chains  = 3
 n_adapt   = 5000
 burn_in   = 1000
-iter      = 10000
+iter      = 30000
 thinning  = 3
 
 

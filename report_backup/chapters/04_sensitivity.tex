@@ -4,74 +4,64 @@
 % ------------------------------------------------------------------
 This section stress-tests the conclusions of Section~\ref{sec:logit}
 (vague-prior logit) and Section~\ref{sec:regression} (horseshoe) against the
-modelling choices we made along the way, and closes by using those two fits
-to formally justify which model we carry forward. We ask four robustness
-questions: does the vague model's posterior depend on the prior \emph{variance}
-we picked (Section~4.1)? Does the horseshoe's signal/noise verdict depend on
-the \emph{global scale} of its half-Cauchy prior (Section~4.2)? Does the
-counter-intuitive \texttt{Departure/Arrival time convenient} coefficient from
-Section~\ref{sec:regression} survive dropping the ambiguous structural-zero
-rows (Section~4.3)? And do any of the conclusions depend on the size of the
-training set (Section~4.4)? We close the chapter (Section~4.5) by comparing
-the two fitted models directly via WAIC and PSIS-LOO, which formalises the
-choice of carrying the horseshoe model forward to Section~\ref{sec:prediction}.
-
-The four robustness checks above require heavy JAGS refits, so they are split
-into separate script files (\texttt{04a\_prior\_sweep.R},
-\texttt{04b\_horseshoe\_prior\_sweep.R}, \texttt{04c\_structural\_zero\_refit.R},
-\texttt{04d\_large\_subsample\_refit.R}) to avoid excessively long cells; each
-script is meant to be executed once and its stored output re-used. The final
-model-comparison step, by contrast, requires no new sampling: it simply
-reuses the pointwise log-likelihood draws already saved by
-Sections~\ref{sec:logit} and~\ref{sec:regression}.
+modelling choices we made along the way. Each of the four checks below opens
+with the question it answers. The chapter then closes by comparing the two
+fitted models directly via WAIC and PSIS-LOO \cite{bl_book}, which formalises
+the choice of carrying the horseshoe model forward to
+Section~\ref{sec:prediction}.
 
 % ==================================================================
 \subsection{Logit model prior sensitivity}
 \label{sec:sens-logit}
 % ==================================================================
-We refit Section~02's model (vague priors, dummy \texttt{Class}
+\emph{Does the vague model's posterior depend on the prior variance we
+picked?} We refit Section~\ref{sec:logit}'s model (vague priors, dummy \texttt{Class}
 encoding) four times, varying only the prior variance on every
 $\beta_j$:
 \[
   \sigma^2_\beta \in \{1,\, 10,\, 100,\, 10000\}.
 \]
-The fits are produced by \texttt{04a\_prior\_sweep.R}. Figure~\ref{fig:prior-sweep}
+Figure~\ref{fig:prior-sweep}
 overlays the posterior mean and $95\%$ credible interval of each
 coefficient across the four prior variances.
-
-\begin{figure}[htbp]
-\centering
-\includegraphics[width=0.9\linewidth]{img/sensitivity/prior_sweep.png}
-\caption{Posterior coefficients of the vague-prior logit model across
-four prior variances.}
-\label{fig:prior-sweep}
-\end{figure}
 
 Table~\ref{tab:prior-range} reports, for each coefficient, the range
 (max $-$ min) of its posterior mean across the four prior variances.
 
-\begin{table}[htbp]
-\centering
-\caption{Range of posterior means across the four prior variances
-(rows are ordered by decreasing range in the notebook).}
-\label{tab:prior-range}
-\begin{tabular}{lc}
-\toprule
-Term & Range of posterior mean \\
-\midrule
-Intercept                     & 0.022 \\
-Age                           & 0.009 \\
-Seat comfort                  & 0.011 \\
-Flight Distance               & 0.008 \\
-Class: Eco Plus               & 0.022 \\
-Class: Business               & 0.057 \\
-log(1+Departure Delay)        & 0.005 \\
-Personal Travel               & 0.016 \\
-disloyal Customer             & 0.066 \\
-Mid-flight delay (signed-log) & 0.001 \\
-\bottomrule
-\end{tabular}
-\end{table}
+\begin{figure}[htbp]
+  \centering
+  \begin{minipage}[c]{0.55\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{img/sensitivity/prior_sweep.png}
+    \captionof{figure}{Posterior coefficients of the vague-prior logit model
+      across four prior variances.}
+    \label{fig:prior-sweep}
+  \end{minipage}
+  \hfill
+  \begin{minipage}[c]{0.42\linewidth}
+    \centering
+    \small
+    \captionof{table}{Range of posterior means across the four prior variances
+      (rows are ordered by decreasing range in the notebook).}
+    \label{tab:prior-range}
+    \begin{tabular}{lc}
+      \toprule
+      Term & Range \\
+      \midrule
+      Intercept                     & 0.010 \\
+      Age                           & 0.009 \\
+      Seat comfort                  & 0.008 \\
+      Flight Distance               & 0.006 \\
+      Class: Eco Plus               & 0.012 \\
+      Class: Business               & 0.038 \\
+      log(1+Departure Delay)        & 0.005 \\
+      Personal Travel               & 0.008 \\
+      disloyal Customer             & 0.066 \\
+      Mid-flight delay (signed-log) & 0.004 \\
+      \bottomrule
+    \end{tabular}
+  \end{minipage}
+\end{figure}
 
 The largest movement across four orders of magnitude of prior variance
 is only $0.066$ on the log-odds scale, for a coefficient whose
@@ -92,16 +82,16 @@ sparsity); large $s$ relaxes the global shrinkage. This is the parameter
 whose choice could plausibly change \emph{which} covariates the model
 keeps, so it is the one worth testing.
 
-\texttt{04b\_horseshoe\_prior\_sweep.R} refits the exact Section~03 model
+We refit the Section~\ref{sec:regression} model
 three times, varying only this global scale,
-$s \in \{0.1,\, 1,\, 10\}$ ($s = 1$ is the Section~03 default), while the
+$s \in \{0.1,\, 1,\, 10\}$ ($s = 1$ is the Section~\ref{sec:regression} default), while the
 local scales $\lambda_j$ keep the standard $\mathcal{C}^+(0,1)$. For each
 fit it stores the posterior mean and $95\%$ credible interval of every
 coefficient, and the per-predictor shrinkage weight
 \[
   \kappa_j = \frac{1}{1 + \lambda_j^2}
 \]
-(near $0$ = signal, near $1$ = shrunk, exactly as in Section~03).
+(near $0$ = signal, near $1$ = shrunk, exactly as in Section~\ref{sec:regression}).
 
 % ------------------------------------------------------------------
 \subsubsection{Coefficients across global scales}
@@ -111,206 +101,142 @@ three global scales, and Table~\ref{tab:hs-range} lists the eight
 predictors whose posterior mean moves most across them.
 
 \begin{figure}[htbp]
-\centering
-\includegraphics[width=0.85\linewidth]{img/sensitivity/horseshoe_sweep.png}
-\caption{Horseshoe posterior coefficients across three global scales,
-ordered by shrinkage weight at the default scale.}
-\label{fig:hs-beta}
+  \centering
+  \begin{minipage}[c]{0.46\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{img/sensitivity/horseshoe_sweep.png}
+    \captionof{figure}{Horseshoe posterior coefficients across three global
+      scales, ordered by shrinkage weight at the default scale.}
+    \label{fig:hs-beta}
+  \end{minipage}
+  \hfill
+  \begin{minipage}[c]{0.50\linewidth}
+    \centering
+    \small
+    \captionof{table}{Largest movement of the posterior mean across the three
+      global scales (top eight predictors).}
+    \label{tab:hs-range}
+    \begin{tabular}{lc}
+      \toprule
+      Term & Range \\
+      \midrule
+      Personal Travel                & 0.036 \\
+      disloyal Customer              & 0.020 \\
+      Food and drink                 & 0.017 \\
+      Seat comfort                   & 0.016 \\
+      Class: Business                & 0.015 \\
+      Ease of Online booking         & 0.009 \\
+      Online support                 & 0.009 \\
+      Baggage handling               & 0.008 \\
+      \bottomrule
+    \end{tabular}
+  \end{minipage}
 \end{figure}
-
-\begin{table}[htbp]
-\centering
-\caption{Largest movement of the posterior mean across the three global
-scales (top eight predictors).}
-\label{tab:hs-range}
-\begin{tabular}{lc}
-\toprule
-Term & Range of posterior mean \\
-\midrule
-Personal Travel                & 0.018 \\
-disloyal Customer              & 0.018 \\
-Food and drink                 & 0.013 \\
-Seat comfort                   & 0.011 \\
-Baggage handling               & 0.005 \\
-Class: Eco Plus                & 0.005 \\
-Ease of Online booking         & 0.004 \\
-Cleanliness                    & 0.004 \\
-\bottomrule
-\end{tabular}
-\end{table}
 
 % ------------------------------------------------------------------
 \subsubsection{Shrinkage weights and signal/noise stability}
 % ------------------------------------------------------------------
-Table~\ref{tab:hs-kappa} gives the posterior shrinkage weight
-$\kappa_j$ for every predictor at each global scale, and
-Table~\ref{tab:hs-signal} turns each $\kappa_j$ into a signal/noise
-verdict ($\kappa_j < 0.5 \Rightarrow$ signal), flagging as
-\texttt{stable} the predictors that keep the same verdict at all three
-scales.
+Turning each $\kappa_j$ into a verdict ($\kappa_j < 0.5 \Rightarrow$ signal)
+lets us ask the sharper question: does the global scale change \emph{which}
+covariates the model keeps? Across a hundred-fold range of $s$, two of the
+$22$ predictors change their classification: \texttt{Online support} and
+\texttt{Cleanliness}, both of which sit within $0.02$ of the $\kappa = 0.5$
+boundary at the default scale and so flip on the smallest movement. The other
+twenty keep the same verdict throughout. The eleven the model calls signal at
+$s = 1$ (\texttt{disloyal Customer}, \texttt{Inflight entertainment},
+\texttt{Class: Business}, \texttt{Personal Travel}, \texttt{Seat comfort},
+\texttt{On-board service}, \texttt{Ease of Online booking},
+\texttt{Dep/Arr time convenient}, \texttt{Checkin service},
+\texttt{Leg room service} and \texttt{Food and drink}) are the same eleven
+at $s = 0.1$ and at $s = 10$, apart from the two boundary cases.
 
-\begin{table}[htbp]
-\centering
-\caption{Posterior shrinkage weight $\kappa_j$ at each global scale
-(one row per predictor; 22 predictors in total).}
-\label{tab:hs-kappa}
-\begin{tabular}{lccc}
-\toprule
-Term & $s = 0.1$ & $s = 1$ & $s = 10$ \\
-\midrule
-disloyal Customer              & 0.052 & 0.071 & 0.076 \\
-Inflight entertainment         & 0.133 & 0.171 & 0.181 \\
-Class: Business                & 0.145 & 0.180 & 0.191 \\
-On-board service               & 0.312 & 0.364 & 0.378 \\
-Personal Travel                & 0.316 & 0.349 & 0.362 \\
-Seat comfort                   & 0.326 & 0.365 & 0.382 \\
-Ease of Online booking         & 0.361 & 0.416 & 0.429 \\
-Checkin service                & 0.370 & 0.426 & 0.434 \\
-Dep/Arr time convenient        & 0.371 & 0.418 & 0.419 \\
-Leg room service               & 0.397 & 0.449 & 0.465 \\
-Food and drink                 & 0.449 & 0.489 & 0.489 \\
-Online support                 & 0.485 & 0.525 & 0.534 \\
-Cleanliness                    & 0.509 & 0.544 & 0.550 \\
-Class: Eco Plus                & 0.653 & 0.667 & 0.667 \\
-Baggage handling               & 0.673 & 0.692 & 0.703 \\
-log(1+Departure Delay)         & 0.684 & 0.700 & 0.717 \\
-Inflight wifi service          & 0.705 & 0.740 & 0.739 \\
-Online boarding                & 0.714 & 0.728 & 0.732 \\
-Age                            & 0.735 & 0.765 & 0.766 \\
-Flight Distance                & 0.751 & 0.752 & 0.770 \\
-Gate location                  & 0.751 & 0.756 & 0.750 \\
-Mid-flight delay (signed log)  & 0.770 & 0.780 & 0.783 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\begin{table}[htbp]
-\centering
-\caption{Signal ($\kappa_j < 0.5$) at each global scale; \texttt{stable}
-indicates the same verdict across all three scales.}
-\label{tab:hs-signal}
-\begin{tabular}{lcccc}
-\toprule
-Term & $s = 0.1$ & $s = 1$ & $s = 10$ & stable \\
-\midrule
-disloyal Customer              & yes & yes & yes & \checkmark \\
-Inflight entertainment         & yes & yes & yes & \checkmark \\
-Class: Business                & yes & yes & yes & \checkmark \\
-On-board service               & yes & yes & yes & \checkmark \\
-Personal Travel                & yes & yes & yes & \checkmark \\
-Seat comfort                   & yes & yes & yes & \checkmark \\
-Ease of Online booking         & yes & yes & yes & \checkmark \\
-Checkin service                & yes & yes & yes & \checkmark \\
-Dep/Arr time convenient        & yes & yes & yes & \checkmark \\
-Leg room service               & yes & yes & yes & \checkmark \\
-Food and drink                 & yes & yes & yes & \checkmark \\
-Online support                 & yes & no  & no  &            \\
-Cleanliness                    & no  & no  & no  & \checkmark \\
-Class: Eco Plus                & no  & no  & no  & \checkmark \\
-Baggage handling               & no  & no  & no  & \checkmark \\
-log(1+Departure Delay)         & no  & no  & no  & \checkmark \\
-Inflight wifi service          & no  & no  & no  & \checkmark \\
-Online boarding                & no  & no  & no  & \checkmark \\
-Age                            & no  & no  & no  & \checkmark \\
-Flight Distance                & no  & no  & no  & \checkmark \\
-Gate location                  & no  & no  & no  & \checkmark \\
-Mid-flight delay (signed log)  & no  & no  & no  & \checkmark \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-Across a hundred-fold range of the global scale, one of the
-$22$ predictors changes its signal/noise classification. The covariates
-the model calls signal at the default scale ($s = 1$) ---
-\texttt{disloyal Customer}, \texttt{Inflight entertainment},
-\texttt{Class: Business}, \texttt{On-board service},
-\texttt{Personal Travel}, \texttt{Seat comfort},
-\texttt{Ease of Online booking}, \texttt{Checkin service},
-\texttt{Dep/Arr time convenient}, \texttt{Leg room service} and
-\texttt{Food and drink} --- are largely preserved across scales,
-and the largest shift in any posterior mean is $0.018$ on
-the log-odds scale. The strong effects identified in Section~03
-(\texttt{disloyal Customer}, \texttt{Personal Travel},
-\texttt{Seat comfort}) stay strong and confidently non-zero regardless
-of $s$; only the coefficients already sitting near the $\kappa = 0.5$
-boundary drift, which is exactly where sensitivity to the global scale
-is expected and where we drew no firm conclusions in the first place.
-The headline reading of Section~03 is therefore not an artefact of the
-particular half-Cauchy scale we chose.
+The strong effects of Section~\ref{sec:regression}
+(\texttt{disloyal Customer}, \texttt{Personal Travel}, \texttt{Seat comfort})
+stay strong and confidently non-zero regardless of $s$, and the largest shift
+in any posterior mean is $0.036$ on the log-odds scale. Only the coefficients
+already sitting near the boundary drift, which is exactly where sensitivity to
+the global scale is expected and where we drew no firm conclusions in the first
+place. The headline reading of Section~\ref{sec:regression} is therefore not an
+artefact of the particular half-Cauchy scale we chose. The full
+$\kappa_j$ values at each scale, and the verdict table they produce, are in
+Appendix~\ref{app:hs_shrinkage}.
 
 % ==================================================================
 \subsection{Structural-zero robustness check}
 \label{sec:sens-structzero}\label{sec:robustness}
 % ==================================================================
-Section~03 speculated that \texttt{Departure/Arrival time convenient}'s
+\emph{Does the counter-intuitive \texttt{Departure/Arrival time convenient}
+coefficient survive dropping the ambiguous structural-zero rows?}
+Section~\ref{sec:regression} speculated that its
 counter-intuitive \emph{negative} coefficient might be an artefact of
-the structural zeros flagged in Section~00 (zeros that plausibly mean
+the structural zeros flagged in Section~\ref{sec:data_expl} (zeros that plausibly mean
 ``not applicable'' rather than genuine dissatisfaction). We test that
 directly by refitting the full horseshoe model with those rows excluded
-(\texttt{04c\_structural\_zero\_refit.R}): $110$ rows are
+: $110$ rows are
 dropped, leaving $1103$.
 
 Table~\ref{tab:structzero} reports the refit, and Figure~\ref{fig:structzero}
 compares the ``seat/catering/ground'' cluster with and without the
 ambiguous rows.
 
-\begin{table}[htbp]
-\centering
-\caption{Horseshoe refit excluding structural-zero rows.}
-\label{tab:structzero}
-\begin{tabular}{lcccc}
-\toprule
-Term & $\beta$ mean & $\beta$ lo & $\beta$ hi & $\kappa_j$ \\
-\midrule
-Disloyal Customer              & $-2.286$ & $-2.975$ & $-1.599$ & 0.059 \\
-Inflight entertainment         & $+1.090$ & $+0.833$ & $+1.361$ & 0.165 \\
-Class: Business                & $+0.976$ & $+0.387$ & $+1.535$ & 0.199 \\
-Seat comfort                   & $+0.881$ & $+0.577$ & $+1.194$ & 0.209 \\
-Personal Travel                & $-0.641$ & $-1.278$ & $-0.008$ & 0.331 \\
-On-board service               & $+0.521$ & $+0.231$ & $+0.798$ & 0.338 \\
-Dep/Arr time convenient        & $-0.513$ & $-0.782$ & $-0.234$ & 0.347 \\
-Ease of Online booking         & $+0.493$ & $+0.090$ & $+0.902$ & 0.370 \\
-Checkin service                & $+0.378$ & $+0.154$ & $+0.595$ & 0.420 \\
-Leg room service               & $+0.297$ & $+0.056$ & $+0.529$ & 0.486 \\
-Online support                 & $+0.249$ & $-0.021$ & $+0.548$ & 0.548 \\
-Gate location                  & $-0.166$ & $-0.459$ & $+0.046$ & 0.618 \\
-Cleanliness                    & $+0.158$ & $-0.054$ & $+0.426$ & 0.630 \\
-Baggage handling               & $+0.130$ & $-0.058$ & $+0.386$ & 0.662 \\
-Class: Eco Plus                & $+0.014$ & $-0.467$ & $+0.505$ & 0.670 \\
-Inflight wifi service          & $-0.106$ & $-0.396$ & $+0.103$ & 0.684 \\
-log(1+Departure Delay)         & $-0.087$ & $-0.294$ & $+0.067$ & 0.714 \\
-Food and drink                 & $+0.020$ & $-0.224$ & $+0.282$ & 0.733 \\
-Online boarding                & $+0.032$ & $-0.202$ & $+0.293$ & 0.735 \\
-Flight Distance                & $-0.016$ & $-0.194$ & $+0.149$ & 0.763 \\
-Age                            & $-0.028$ & $-0.191$ & $+0.114$ & 0.779 \\
-Mid-flight delay (signed log)  & $-0.013$ & $-0.185$ & $+0.144$ & 0.780 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
 \begin{figure}[htbp]
-\centering
-\includegraphics[width=0.9\linewidth]{img/sensitivity/structural_zero.png}
-\caption{Coefficients of the correlated seat/catering/ground cluster,
-full data vs.\ excluding structural-zero rows.}
-\label{fig:structzero}
+  \centering
+  \begin{minipage}[t]{0.50\linewidth}
+    \vspace{0pt}   % [t] aligns first baselines, not top edges
+    \centering
+    \footnotesize
+    \setlength{\tabcolsep}{3pt}
+    \renewcommand{\arraystretch}{0.9}
+    \captionof{table}{Horseshoe refit excluding structural-zero rows: the ten
+      predictors the horseshoe keeps as signal ($\kappa_j < 0.5$), plus
+      \texttt{Food and drink}, discussed below. The other eleven move by less
+      and are omitted.}
+    \label{tab:structzero}
+    \begin{tabular}{lcccc}
+      \toprule
+      Term & $\beta$ mean & $\beta$ lo & $\beta$ hi & $\kappa_j$ \\
+      \midrule
+      disloyal Customer              & $-2.298$ & $-2.998$ & $-1.621$ & 0.061 \\
+      Inflight entertainment         & $+1.099$ & $+0.844$ & $+1.376$ & 0.164 \\
+      Seat comfort                   & $+0.869$ & $+0.550$ & $+1.192$ & 0.215 \\
+      Class: Business                & $+0.936$ & $+0.378$ & $+1.518$ & 0.219 \\
+      Personal Travel                & $-0.678$ & $-1.256$ & $-0.037$ & 0.308 \\
+      On-board service               & $+0.526$ & $+0.240$ & $+0.809$ & 0.343 \\
+      Dep/Arr time convenient        & $-0.506$ & $-0.780$ & $-0.240$ & 0.361 \\
+      Ease of Online booking         & $+0.498$ & $+0.081$ & $+0.872$ & 0.369 \\
+      Checkin service                & $+0.376$ & $+0.156$ & $+0.592$ & 0.429 \\
+      Leg room service               & $+0.294$ & $+0.050$ & $+0.524$ & 0.492 \\
+      \midrule
+      Food and drink                 & $+0.025$ & $-0.215$ & $+0.299$ & 0.732 \\
+      \bottomrule
+    \end{tabular}
+  \end{minipage}
+  \hspace{.5cm}
+  \begin{minipage}[t]{0.46\linewidth}
+    \vspace{0pt}
+    \centering
+    \includegraphics[width=0.7\linewidth]{img/sensitivity/structural_zero.png}
+    \captionof{figure}{Coefficients of the correlated seat/catering/ground
+      cluster, full data vs.\ excluding structural-zero rows.}
+    \label{fig:structzero}
+  \end{minipage}
 \end{figure}
 
 \noindent\textbf{The hypothesis does not survive the check.}
 \texttt{Departure/Arrival time convenient}'s negative coefficient does
-not shrink towards zero when the ambiguous rows are removed --- it gets
-\emph{more} negative (from $-0.335$ to $-0.513$), while its credible
+not shrink towards zero when the ambiguous rows are removed; it gets
+\emph{more} negative (from $-0.334$ to $-0.506$), while its credible
 interval widens slightly, as expected with $110$ fewer rows. Whatever
 drives this effect, it is not
-simply the structural-zero ambiguity we suspected in Section~03; we
+simply the structural-zero ambiguity we suspected in Section~\ref{sec:regression}; we
 report this as an open, unresolved finding rather than force a tidier
 story onto it. On the other hand, the other two members of that same correlated
 cluster move in \emph{opposite} directions once the ambiguous rows are
 excluded. \texttt{Seat comfort} strengthens substantially ($\kappa$
-drops from $0.367$ to $0.209$, $\beta$ rises from $+0.419$ to
-$+0.881$), whereas \texttt{Food and drink} goes from a borderline
-signal ($\kappa = 0.492$, $\beta = -0.275$) to firmly shrunk
-($\kappa = 0.733$, $\beta = +0.020$). The structural zeros therefore
+drops from $0.370$ to $0.215$, $\beta$ rises from $+0.424$ to
+$+0.869$), whereas \texttt{Food and drink} goes from a borderline
+signal ($\kappa = 0.486$, $\beta = -0.280$) to firmly shrunk
+($\kappa = 0.732$, $\beta = +0.025$). The structural zeros therefore
 do not add uniform noise across the cluster; they affect its members
 differently.
 
@@ -319,41 +245,37 @@ differently.
 \subsection{Sample-size robustness}
 \label{sec:sens-samplesize}
 % ==================================================================
-The logit prior-variance sweep (Section~\ref{sec:sens-logit}) and the
-horseshoe global-scale sweep (Section~\ref{sec:sens-horseshoe}) varied
-the prior; the structural-zero refit
-(Section~\ref{sec:sens-structzero}) varied which rows enter the fit.
-This one varies how many. Every model in this report is estimated on
-\num{1213} records,
-about $1\%$ of the cleaned dataset, a choice forced by MCMC cost.
-\texttt{04d\_large\_subsample\_refit.R} refits the model of
-Section~\ref{sec:logit} on a stratified
-subsample of \num{15003} records. This leaves the coefficients we rely on
+\emph{Do any of the conclusions depend on the size of the training set?}
+The previous three checks varied the prior and which rows enter the fit; this
+one varies how many. We refit the model of Section~\ref{sec:logit} on a
+stratified subsample of \num{15003} records, twelve times the \num{1213} used
+throughout. This leaves the coefficients we rely on
 unmoved (\texttt{Class: Business} by $0.005$, \texttt{disloyal
-Customer} by $0.014$, \texttt{Seat comfort} by $0.022$) and contracts
-the intervals by a median factor of $3.42$, against the $3.52$ that
-$\sqrt{n}$ asymptotics predicts. Three weak effects
-(\texttt{Flight Distance}, \texttt{Age}, \texttt{Mid-flight delay})
-acquire intervals excluding zero, which is a limitation of the
+Customer} by $0.004$, \texttt{Seat comfort} by $0.023$) and contracts
+the intervals by a median factor of $3.54$, in line with the $3.52$ that
+$\sqrt{n}$ asymptotics predicts. Four weak effects
+(\texttt{Flight Distance}, \texttt{Age}, \texttt{Personal Travel},
+\texttt{Mid-flight delay}) acquire intervals excluding zero, which is a limitation of the
 $n = 1213$ analysis rather than a finding about the airline.
 
 \subsection{Model comparison: WAIC and PSIS-LOO}
 \label{WPSIS}
 
-Alongside the WAIC-based comparison of Section~2.2 (used there to choose the
-\texttt{Class} encoding), we compare the vague-prior logit of Section~2 and
-the horseshoe model of Section~3 via Pareto-smoothed importance sampling
+Alongside the WAIC-based comparison of Section~\ref{sec:class-encoding} (used there to choose the
+\texttt{Class} encoding), we compare the vague-prior logit of Section~\ref{sec:logit} and
+the horseshoe model of Section~\ref{sec:regression} via Pareto-smoothed importance sampling
 leave-one-out cross-validation (PSIS-LOO), computed from the same pointwise
 log-likelihood draws already collected for each fit.
 
 \begin{table}[h]
+\small
 \centering
 \begin{tabular}{lccc}
 \hline
 Model & elpd\_loo (SE) & $p_{\text{loo}}$ & LOO-IC \\
 \hline
 Vague-prior logit & $-686.7$ (16.7) & 10.4 & 1373.4 \\
-Horseshoe          & $-491.8$ (21.2) & 21.8 & 983.7 \\
+Horseshoe          & $-491.9$ (21.2) & 21.8 & 983.8 \\
 \hline
 \end{tabular}
 \caption{PSIS-LOO comparison between the two models, on the $n=1213$
@@ -362,11 +284,11 @@ so the PSIS-LOO estimates are reliable without further caveats.}
 \end{table}
 
 The horseshoe attains a substantially higher expected log predictive density
-($\Delta\text{elpd} = -194.9$, SE $= 17.5$): the difference is more than eleven
+($\Delta\text{elpd} = -194.8$, SE $= 17.5$): the difference is more than eleven
 standard errors, a decisive preference by any conventional threshold. This
-agrees with the WAIC comparison of Section~2.2 -- indeed the logit's LOO-IC
-(1373.4) essentially reproduces its WAIC (1373.2) from Table~2, confirming
-the two approximations agree here -- and justifies carrying the horseshoe
-model forward as the model of record for Section~5.
+agrees with the WAIC comparison of Section~\ref{sec:class-encoding} -- indeed the logit's LOO-IC
+(1373.4) matches its WAIC (1373.4) to the first decimal, confirming the two
+approximations agree here -- and justifies carrying the horseshoe
+model forward as the model of record for Section~\ref{sec:prediction}.
 
 
