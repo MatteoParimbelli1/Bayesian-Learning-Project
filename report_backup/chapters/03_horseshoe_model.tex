@@ -64,9 +64,8 @@ Because of the heavy-tailed half-Cauchy hyperpriors, the horseshoe posterior
 mixes more slowly than the vague-prior model of Section \ref{sec:logit}, and it
 is computationally heavier ($22$ coefficients, $22$ local scales and one global
 scale, against the $9$ parameters of Section \ref{sec:logit}). We therefore
-budget a longer sampling run and thinning from the outset; the settings, reported
-in Table \ref{tab:hs_mcmc_settings}, are deliberately modest given the
-single-core environment at our disposale and could be extended on a more performative machine.
+budget a longer sampling run and thinning from the outset; the settings are
+reported in Table \ref{tab:hs_mcmc_settings}.
 
 \begin{table}[htbp]
   \centering
