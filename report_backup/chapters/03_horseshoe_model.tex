@@ -178,16 +178,16 @@ represent the signal and treats the other two as largely redundant, instead of
 forcing us to pick one by hand.
 
 \textbf{Business class shrinks once service quality is in the model, but remains one
-of the strongest effects.} In Section~2, \texttt{Business} class alone carried a
+of the strongest effects.} In Section~\ref{sec:logit}, \texttt{Business} class alone carried a
 large, confident odds ratio (about 4). Here, with all 14 service ratings included,
 its coefficient drops to approximately 0.9 on the log-odds scale ($\kappa = 0.183$),
 with a 95\% credible interval comfortably above zero (roughly $[0.4, 1.3]$). Together
 with \emph{disloyal Customer} and \emph{Inflight entertainment}, it remains among the
 three least-shrunk, most confidently preserved effects in the entire model -- smaller
-in magnitude than the unconditional estimate of Section~2, but not remotely
-``explained away.'' The natural reading is \emph{mediation, not disappearance}:
+in magnitude than the unconditional estimate of Section~\ref{sec:logit}, but not remotely
+``explained away.'' The class effect is real but largely indirect:
 Business passengers are more satisfied largely \emph{because} they enjoy better seat
-comfort, entertainment and service, so in Section~2 the \texttt{Class} dummy was
+comfort, entertainment and service, so in Section~\ref{sec:logit} the \texttt{Class} dummy was
 partly standing in for those ratings simply because they were not yet in the model.
 
 \paragraph{Personal Travel gets stronger, not weaker.}
