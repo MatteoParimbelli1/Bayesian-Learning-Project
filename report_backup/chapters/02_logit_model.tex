@@ -17,10 +17,10 @@ covariates, using the transformations motivated in the data-exploration phase
 delay $\log(1+\texttt{dep\_delay})$ and the \texttt{signed-log mid-flight delay}, together
 with the two binary descriptors \texttt{travel\_type} and
 \texttt{customer\_type}. All continuous covariates are standardized
-(zero mean, unit variance) so that coefficients are expressed per standard deviation and the common prior variance is equally informative for every covariate. For the binary covariates the reference
+(zero mean, unit variance) so that the common prior variance is equally
+informative for every covariate. For the binary covariates the reference
 level is chosen as the majority group (\textit{Business travel} and
-\textit{Loyal customer}), so that each coefficient measures the effect of the
-minority condition relative to the typical customer.
+\textit{Loyal customer}).
 The model \ref{eq:logit_model} is still the same, just reduced at these variables.
 
 \paragraph{Prior specification.}
@@ -38,10 +38,8 @@ Here the second argument denotes the prior \emph{variance} $\sigma^2 = 100$
 (equivalently a precision $1/\sigma^2 = 0.01$ in the JAGS
 parametrisation). On the logit scale a standard deviation of $10$ is very
 diffuse: it places essentially no informative constraint on plausible
-coefficient values while still being proper, so the posterior is driven mostly by the
-likelihood, and the resulting estimates remain directly comparable to a
-maximum-likelihood fit. This choice reflects our lack of prior information and
-keeps the baseline model as neutral as possible.
+coefficient values while still being proper, so the posterior is driven mostly
+by the likelihood.
 
 \subsection{Encoding of the flight class}
 Before committing to the model we address a small preliminary question: is it
@@ -66,9 +64,7 @@ set ($n\approx128{,}000$ customers), using the posterior-mean predictive
 probability $\hat p_i = S^{-1}\sum_{s=1}^{S}\mathrm{logit}^{-1}\!\left(\hat\beta_0^{(s)} + x_i\hat\beta^{(s)}\right)$
 obtained from the already-fitted MCMC draws (without additional sampling). The dummy encoding again outperforms the ordinal one on all three
 out-of-sample scoring rules considered: log-loss (0.557 against 0.562),
-Brier score (0.187 against 0.190), and AUC (0.786 against 0.781). Since the
-WAIC-based preference is corroborated out-of-sample, we treat the encoding
-choice as settled.
+Brier score (0.187 against 0.190), and AUC (0.786 against 0.781). 
 
 \subsection{MCMC setup and convergence}
 Posterior inference is carried out via MCMC in JAGS. Table

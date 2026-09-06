@@ -115,34 +115,37 @@ three global scales, and Table~\ref{tab:hs-range} lists the eight
 predictors whose posterior mean moves most across them.
 
 \begin{figure}[htbp]
-\centering
-\includegraphics[width=0.85\linewidth]{img/sensitivity/horseshoe_sweep.png}
-\caption{Horseshoe posterior coefficients across three global scales,
-ordered by shrinkage weight at the default scale.}
-\label{fig:hs-beta}
+  \centering
+  \begin{minipage}[c]{0.46\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{img/sensitivity/horseshoe_sweep.png}
+    \captionof{figure}{Horseshoe posterior coefficients across three global
+      scales, ordered by shrinkage weight at the default scale.}
+    \label{fig:hs-beta}
+  \end{minipage}
+  \hfill
+  \begin{minipage}[c]{0.50\linewidth}
+    \centering
+    \small
+    \captionof{table}{Largest movement of the posterior mean across the three
+      global scales (top eight predictors).}
+    \label{tab:hs-range}
+    \begin{tabular}{lc}
+      \toprule
+      Term & Range of posterior mean \\
+      \midrule
+      Personal Travel                & 0.036 \\
+      disloyal Customer              & 0.020 \\
+      Food and drink                 & 0.017 \\
+      Seat comfort                   & 0.016 \\
+      Class: Business                & 0.015 \\
+      Ease of Online booking         & 0.009 \\
+      Online support                 & 0.009 \\
+      Baggage handling               & 0.008 \\
+      \bottomrule
+    \end{tabular}
+  \end{minipage}
 \end{figure}
-
-\begin{table}[htbp]
-\small
-\centering
-\caption{Largest movement of the posterior mean across the three global
-scales (top eight predictors).}
-\label{tab:hs-range}
-\begin{tabular}{lc}
-\toprule
-Term & Range of posterior mean \\
-\midrule
-Personal Travel                & 0.036 \\
-disloyal Customer              & 0.020 \\
-Food and drink                 & 0.017 \\
-Seat comfort                   & 0.016 \\
-Class: Business                & 0.015 \\
-Ease of Online booking         & 0.009 \\
-Online support                 & 0.009 \\
-Baggage handling               & 0.008 \\
-\bottomrule
-\end{tabular}
-\end{table}
 
 % ------------------------------------------------------------------
 \subsubsection{Shrinkage weights and signal/noise stability}
@@ -225,7 +228,7 @@ Mid-flight delay (signed log)  & $-0.014$ & $-0.189$ & $+0.153$ & 0.780 \\
 
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=0.9\linewidth]{img/sensitivity/structural_zero.png}
+\includegraphics[width=0.62\linewidth]{img/sensitivity/structural_zero.png}
 \caption{Coefficients of the correlated seat/catering/ground cluster,
 full data vs.\ excluding structural-zero rows.}
 \label{fig:structzero}
