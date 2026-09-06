@@ -134,12 +134,31 @@ predictive distribution per subgroup to compare the observed rate against;
 Figure~\ref{fig:ppc} shows the result.
 
 \begin{figure}[htbp]
-\centering
-\includegraphics[width=0.75\linewidth]{img/prediction/ppc_subgroups.png}
-\caption{Posterior predictive check by subgroup. Densities are the simulated
-satisfaction rates; dashed lines mark the rates actually observed in the
-held-out set.}
-\label{fig:ppc}
+  \centering
+  \begin{minipage}[c]{0.56\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{img/prediction/ppc_subgroups.png}
+    \captionof{figure}{Posterior predictive check by subgroup. Densities are the
+      simulated replicate satisfaction rates; the vertical line is the observed rate.}
+    \label{fig:ppc}
+  \end{minipage}
+  \hfill
+  \begin{minipage}[c]{0.40\linewidth}
+    \centering
+    \small
+    \captionof{table}{Cutoff minimising expected loss, by assumed cost ratio
+      $C_{\text{miss}}\!:\!C_{\text{waste}}$.}
+    \label{tab:loss}
+    \begin{tabular}{lcc}
+      \toprule
+      Cost ratio & Optimal cutoff $t^\star$ & Expected loss \\
+      \midrule
+      $1\!:\!1$ (equal cost) & 0.55 & 0.172 \\
+      $3\!:\!1$              & 0.75 & 0.252 \\
+      $5\!:\!1$              & 0.80 & 0.288 \\
+      \bottomrule
+    \end{tabular}
+  \end{minipage}
 \end{figure}
 
 The observed rates fall inside the bulk of the simulated distributions for
@@ -169,23 +188,6 @@ the airline need not price either error, just say how many wasted contacts it
 would trade for one retained customer. Table~\ref{tab:loss} gives the
 minimising cutoff at three such ratios.
 
-\begin{table}[htbp]
-\centering
-\small
-\caption{Cutoff minimising expected loss, by assumed cost ratio
-$C_{\text{miss}}\!:\!C_{\text{waste}}$.}
-\label{tab:loss}
-\setlength{\tabcolsep}{4pt}
-\begin{tabular}{lcc}
-\toprule
-Cost ratio & Optimal cutoff $t^\star$ & Expected loss \\
-\midrule
-$1\!:\!1$ (equal cost) & 0.55 & 0.172 \\
-$3\!:\!1$              & 0.75 & 0.252 \\
-$5\!:\!1$              & 0.80 & 0.288 \\
-\bottomrule
-\end{tabular}
-\end{table}
 
 Under equal costs the optimum is $t^\star = 0.55$, essentially the base rate
 and close to the conventional $0.5$, a useful sanity check on

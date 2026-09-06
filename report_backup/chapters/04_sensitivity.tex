@@ -191,47 +191,52 @@ Table~\ref{tab:structzero} reports the refit, and Figure~\ref{fig:structzero}
 compares the ``seat/catering/ground'' cluster with and without the
 ambiguous rows.
 
-\begin{table}[htbp]
-\small
-\centering
-\caption{Horseshoe refit excluding structural-zero rows.}
-\label{tab:structzero}
-\begin{tabular}{lcccc}
-\toprule
-Term & $\beta$ mean & $\beta$ lo & $\beta$ hi & $\kappa_j$ \\
-\midrule
-disloyal Customer              & $-2.298$ & $-2.998$ & $-1.621$ & 0.061 \\
-Inflight entertainment         & $+1.099$ & $+0.844$ & $+1.376$ & 0.164 \\
-Seat comfort                   & $+0.869$ & $+0.550$ & $+1.192$ & 0.215 \\
-Class: Business                & $+0.936$ & $+0.378$ & $+1.518$ & 0.219 \\
-Personal Travel                & $-0.678$ & $-1.256$ & $-0.037$ & 0.308 \\
-On-board service               & $+0.526$ & $+0.240$ & $+0.809$ & 0.343 \\
-Dep/Arr time convenient        & $-0.506$ & $-0.780$ & $-0.240$ & 0.361 \\
-Ease of Online booking         & $+0.498$ & $+0.081$ & $+0.872$ & 0.369 \\
-Checkin service                & $+0.376$ & $+0.156$ & $+0.592$ & 0.429 \\
-Leg room service               & $+0.294$ & $+0.050$ & $+0.524$ & 0.492 \\
-Online support                 & $+0.247$ & $-0.019$ & $+0.561$ & 0.553 \\
-Cleanliness                    & $+0.159$ & $-0.059$ & $+0.428$ & 0.610 \\
-Gate location                  & $-0.171$ & $-0.448$ & $+0.048$ & 0.620 \\
-Baggage handling               & $+0.132$ & $-0.059$ & $+0.396$ & 0.666 \\
-Class: Eco Plus                & $+0.010$ & $-0.466$ & $+0.492$ & 0.674 \\
-Inflight wifi service          & $-0.108$ & $-0.399$ & $+0.099$ & 0.681 \\
-log(1+Departure Delay)         & $-0.087$ & $-0.291$ & $+0.064$ & 0.719 \\
-Food and drink                 & $+0.025$ & $-0.215$ & $+0.299$ & 0.732 \\
-Online boarding                & $+0.030$ & $-0.194$ & $+0.296$ & 0.732 \\
-Age                            & $-0.032$ & $-0.209$ & $+0.116$ & 0.747 \\
-Flight Distance                & $-0.016$ & $-0.191$ & $+0.142$ & 0.772 \\
-Mid-flight delay (signed log)  & $-0.014$ & $-0.189$ & $+0.153$ & 0.780 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
 \begin{figure}[htbp]
-\centering
-\includegraphics[width=0.62\linewidth]{img/sensitivity/structural_zero.png}
-\caption{Coefficients of the correlated seat/catering/ground cluster,
-full data vs.\ excluding structural-zero rows.}
-\label{fig:structzero}
+  \centering
+  \begin{minipage}[c]{0.57\linewidth}
+    \centering
+    \footnotesize
+    \setlength{\tabcolsep}{3pt}
+    \renewcommand{\arraystretch}{0.9}
+    \captionof{table}{Horseshoe refit excluding structural-zero rows.}
+    \label{tab:structzero}
+    \begin{tabular}{lcccc}
+      \toprule
+      Term & $\beta$ mean & $\beta$ lo & $\beta$ hi & $\kappa_j$ \\
+      \midrule
+      disloyal Customer              & $-2.298$ & $-2.998$ & $-1.621$ & 0.061 \\
+      Inflight entertainment         & $+1.099$ & $+0.844$ & $+1.376$ & 0.164 \\
+      Seat comfort                   & $+0.869$ & $+0.550$ & $+1.192$ & 0.215 \\
+      Class: Business                & $+0.936$ & $+0.378$ & $+1.518$ & 0.219 \\
+      Personal Travel                & $-0.678$ & $-1.256$ & $-0.037$ & 0.308 \\
+      On-board service               & $+0.526$ & $+0.240$ & $+0.809$ & 0.343 \\
+      Dep/Arr time convenient        & $-0.506$ & $-0.780$ & $-0.240$ & 0.361 \\
+      Ease of Online booking         & $+0.498$ & $+0.081$ & $+0.872$ & 0.369 \\
+      Checkin service                & $+0.376$ & $+0.156$ & $+0.592$ & 0.429 \\
+      Leg room service               & $+0.294$ & $+0.050$ & $+0.524$ & 0.492 \\
+      Online support                 & $+0.247$ & $-0.019$ & $+0.561$ & 0.553 \\
+      Cleanliness                    & $+0.159$ & $-0.059$ & $+0.428$ & 0.610 \\
+      Gate location                  & $-0.171$ & $-0.448$ & $+0.048$ & 0.620 \\
+      Baggage handling               & $+0.132$ & $-0.059$ & $+0.396$ & 0.666 \\
+      Class: Eco Plus                & $+0.010$ & $-0.466$ & $+0.492$ & 0.674 \\
+      Inflight wifi service          & $-0.108$ & $-0.399$ & $+0.099$ & 0.681 \\
+      log(1+Departure Delay)         & $-0.087$ & $-0.291$ & $+0.064$ & 0.719 \\
+      Food and drink                 & $+0.025$ & $-0.215$ & $+0.299$ & 0.732 \\
+      Online boarding                & $+0.030$ & $-0.194$ & $+0.296$ & 0.732 \\
+      Age                            & $-0.032$ & $-0.209$ & $+0.116$ & 0.747 \\
+      Flight Distance                & $-0.016$ & $-0.191$ & $+0.142$ & 0.772 \\
+      Mid-flight delay (signed log)  & $-0.014$ & $-0.189$ & $+0.153$ & 0.780 \\
+      \bottomrule
+    \end{tabular}
+  \end{minipage}
+  \hfill
+  \begin{minipage}[c]{0.40\linewidth}
+    \centering
+    \includegraphics[width=\linewidth]{img/sensitivity/structural_zero.png}
+    \captionof{figure}{Coefficients of the correlated seat/catering/ground
+      cluster, full data vs.\ excluding structural-zero rows.}
+    \label{fig:structzero}
+  \end{minipage}
 \end{figure}
 
 \noindent\textbf{The hypothesis does not survive the check.}

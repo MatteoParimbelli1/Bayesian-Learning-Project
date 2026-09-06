@@ -69,40 +69,47 @@ in Table \ref{tab:hs_mcmc_settings}, are deliberately modest given the
 single-core environment at our disposale and could be extended on a more performative machine.
 
 \begin{table}[htbp]
-\small
   \centering
-  \caption{MCMC settings used for the horseshoe model}
-  \label{tab:hs_mcmc_settings}
-  \begin{tabular}{lr}
-    \toprule
-    Setting & Value \\
-    \midrule
-    Chains            & 3 \\
-    Adaptation        & 5000 \\
-    Burn-in           & 1000 \\
-    Iterations        & 30000 \\
-    Thinning          & 3 \\
-    Retained draws    & 30000 \\
-    \bottomrule
-  \end{tabular}
+  \begin{minipage}[t]{0.30\textwidth}
+    \vspace{0pt}
+    \small
+    \centering
+    \begin{tabular}{lr}
+      \toprule
+      Setting & Value \\
+      \midrule
+      Chains            & 3 \\
+      Adaptation        & 5000 \\
+      Burn-in           & 1000 \\
+      Iterations        & 30000 \\
+      Thinning          & 3 \\
+      Retained draws    & 30000 \\
+      \bottomrule
+    \end{tabular}
+    \caption{MCMC settings used for the horseshoe model}
+    \label{tab:hs_mcmc_settings}
+  \end{minipage}
+  \hfill
+  \begin{minipage}[t]{0.66\textwidth}
+    \vspace{0pt}
+    Convergence was assessed separately for the two blocks of parameters, the
+    regression coefficients $\{\beta_j, \beta_0, \beta_{\text{mid}}\}$ and the scale
+    parameters $\{\lambda_j, \lambda_{\text{mid}}, \tau\}$, since the latter are the
+    harder to sample. For each block we inspected the Gelman--Rubin potential scale
+    reduction factors, the effective sample sizes, and the trace and autocorrelation
+    plots. The coefficients mix well: every one has a scale-reduction factor of $1.00$
+    and an effective sample size in the thousands. The local scales $\lambda_j$ mix
+    more slowly and show higher autocorrelation, as expected for a horseshoe, and
+    three of them sit at or above the conventional $1.1$ threshold; the global scale
+    $\tau$, by contrast, is among the better-behaved parameters in that block.
+    Figures \ref{fig:hs_trace_beta} and \ref{fig:hs_trace_lambda} show a
+    representative trace plot for each block. The complete diagnostic material --
+    all trace and autocorrelation plots for both blocks, together with the full
+    Gelman--Rubin and effective-sample-size tables -- is collected in
+    Appendix~\ref{app:horseshoe_convergence}, where the three imperfectly converged
+    scales are identified and their consequences discussed.
+  \end{minipage}
 \end{table}
-
-Convergence was assessed separately for the two blocks of parameters, the
-regression coefficients $\{\beta_j, \beta_0, \beta_{\text{mid}}\}$ and the scale
-parameters $\{\lambda_j, \lambda_{\text{mid}}, \tau\}$, since the latter are the
-harder to sample. For each block we inspected the Gelman--Rubin potential scale
-reduction factors, the effective sample sizes, and the trace and autocorrelation
-plots. The coefficients mix well: every one has a scale-reduction factor of $1.00$
-and an effective sample size in the thousands. The local scales $\lambda_j$ mix
-more slowly and show higher autocorrelation, as expected for a horseshoe, and
-three of them sit at or above the conventional $1.1$ threshold; the global scale
-$\tau$, by contrast, is among the better-behaved parameters in that block.
-Figures \ref{fig:hs_trace_beta} and \ref{fig:hs_trace_lambda} show a
-representative trace plot for each block. The complete diagnostic material --
-all trace and autocorrelation plots for both blocks, together with the full
-Gelman--Rubin and effective-sample-size tables -- is collected in
-Appendix~\ref{app:horseshoe_convergence}, where the three imperfectly converged
-scales are identified and their consequences discussed.
 
 \begin{figure}[!ht]
   \centering
