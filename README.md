@@ -92,7 +92,7 @@ bash miniforge.sh -b -p "$HOME/miniforge3"
 # 2. Create the environment
 "$HOME/miniforge3/bin/mamba" create -y -n blams -c conda-forge \
   r-base r-essentials jags r-rjags r-coda r-loo r-dplyr r-tidyr \
-  r-ggplot2 r-ggrepel r-rcolorbrewer r-proc r-rmarkdown
+  r-ggplot2 r-rcolorbrewer r-rmarkdown r-bayesplot r-caret r-corrplot r-here
 
 # 3. BAS is not on conda-forge, so install it from CRAN inside the env
 source "$HOME/miniforge3/etc/profile.d/conda.sh" && conda activate blams
@@ -123,7 +123,8 @@ Rscript -e 'rmarkdown::render("deliver/02_logit_model.Rmd")'
 
 ```r
 install.packages(c("rjags", "coda", "loo", "BAS", "dplyr", "tidyr",
-                   "ggplot2", "ggrepel", "RColorBrewer", "pROC", "rmarkdown"))
+                   "ggplot2", "RColorBrewer", "rmarkdown",
+                   "bayesplot", "caret", "corrplot", "here"))
 ```
 
 Then knit each `.Rmd` with the Knit button, in order.
