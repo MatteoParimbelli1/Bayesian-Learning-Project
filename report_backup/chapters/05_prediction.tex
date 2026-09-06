@@ -216,13 +216,15 @@ set under a horseshoe shrinkage prior, with \texttt{BAS} model averaging as an
 independent cross-check. All posteriors were sampled by MCMC in JAGS.
 
 \subsection{Findings}
-Three effects dominate and survive every specification. Customer loyalty is the
-strongest by a wide margin and the least shrunk coefficient at every global
-scale tested; \emph{Inflight entertainment} and \emph{Business} class follow,
-essentially tied ($\kappa_j = 0.17$ and $0.18$). Entertainment is the service
-item the prior preserves most clearly, while \emph{Inflight wifi service} is
-heavily shrunk despite correlating at $0.67$ with \emph{Online boarding} inside
-the same booking cluster. That asymmetry is what the horseshoe was chosen for.
+Three effects dominate and survive every specification. \textbf{Customer
+loyalty} is the strongest by a wide margin and the least shrunk coefficient at
+every global scale tested ($\kappa_j = \mathbf{0.07}$); \textbf{Inflight
+entertainment} and \textbf{Business} class follow, essentially tied
+($\kappa_j = \mathbf{0.17}$ and $\mathbf{0.18}$). Entertainment is the service
+item the prior preserves most clearly, while \textbf{Inflight wifi service} is
+heavily shrunk ($\kappa_j = \mathbf{0.73}$) despite correlating at
+$\mathbf{0.67}$ with \textbf{Online boarding} inside the same booking cluster.
+That asymmetry is what the horseshoe was chosen for.
 
 These conclusions are not artefacts of our modelling choices. The vague-prior
 posterior moves by at most $0.066$ across four orders of magnitude of prior
@@ -230,8 +232,9 @@ variance; two predictors of twenty-two change their signal/noise verdict across
 a hundred-fold range of the global scale, and both sit within $0.02$ of the
 $\kappa = 0.5$ boundary; and a training set twelve times larger moves the
 coefficients we report by at most $0.023$. Out of sample, on \num{128274}
-unseen customers, the model reaches an AUC of $0.900$, classifies $82.8\%$
-correctly, and reproduces the observed satisfaction rate in every subgroup.
+unseen customers, the model reaches an AUC of $\mathbf{0.900}$, classifies
+$\mathbf{82.8\%}$ correctly, and reproduces the observed satisfaction rate in
+every subgroup.
 
 \subsection{Open questions and limitations}
 
