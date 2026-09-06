@@ -153,15 +153,15 @@ predictors whose posterior mean moves most across them.
 Turning each $\kappa_j$ into a verdict ($\kappa_j < 0.5 \Rightarrow$ signal)
 lets us ask the sharper question: does the global scale change \emph{which}
 covariates the model keeps? Across a hundred-fold range of $s$, two of the
-$22$ predictors change their classification --- \texttt{Online support} and
+$22$ predictors change their classification: \texttt{Online support} and
 \texttt{Cleanliness}, both of which sit within $0.02$ of the $\kappa = 0.5$
 boundary at the default scale and so flip on the smallest movement. The other
 twenty keep the same verdict throughout. The eleven the model calls signal at
-$s = 1$ --- \texttt{disloyal Customer}, \texttt{Inflight entertainment},
+$s = 1$ (\texttt{disloyal Customer}, \texttt{Inflight entertainment},
 \texttt{Class: Business}, \texttt{Personal Travel}, \texttt{Seat comfort},
 \texttt{On-board service}, \texttt{Ease of Online booking},
 \texttt{Dep/Arr time convenient}, \texttt{Checkin service},
-\texttt{Leg room service} and \texttt{Food and drink} --- are the same eleven
+\texttt{Leg room service} and \texttt{Food and drink}) are the same eleven
 at $s = 0.1$ and at $s = 10$, apart from the two boundary cases.
 
 The strong effects of Section~\ref{sec:regression}
@@ -241,7 +241,7 @@ ambiguous rows.
 
 \noindent\textbf{The hypothesis does not survive the check.}
 \texttt{Departure/Arrival time convenient}'s negative coefficient does
-not shrink towards zero when the ambiguous rows are removed --- it gets
+not shrink towards zero when the ambiguous rows are removed; it gets
 \emph{more} negative (from $-0.334$ to $-0.506$), while its credible
 interval widens slightly, as expected with $110$ fewer rows. Whatever
 drives this effect, it is not
